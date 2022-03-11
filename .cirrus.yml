@@ -1,0 +1,32 @@
+env:
+  TZ: Asia/KolKata
+  DEBIAN_FRONTEND: noninteractive
+
+task:
+  name: "Ubuntu SSH"
+  timeout_in: 120m  
+  container:
+      image: ubuntu:latest
+      cpu: 8
+      memory: 32G
+  
+  Build-Env-Setup_script:
+       - apt update
+       - apt install sudo
+       - df -h
+       - DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends tzdata
+       - ln -sf /usr/share/zoneinfo/${TZ} /etc/localtime
+       - apt-get install -y tzdata
+       - dpkg-reconfigure --frontend noninteractive tzdata
+       - sudo apt update -y && sudo apt install git aria2 curl wget rsync zip unzip lzma cpio ccache neofetch -y
+       - sudo apt install python2 -y
+       - sudo ln -sf /usr/bin/python2 /usr/bin/python
+       - ssh-keygen -t rsa -q -f "$HOME/.ssh/id_rsa" -N ""
+  
+  Tmate_script:
+       - curl https://raw.githubusercontent.com/Sushrut1101/Ubuntu-Tmate/master/tmate > ~/tmate
+       - sudo bash ~/tmate
+  
+  Spam_script:
+       - curl https://raw.githubusercontent.com/Sushrut1101/Ubuntu-Tmate/master/spam.sh > ~/spam.sh
+       - bash ~/spam.sh
