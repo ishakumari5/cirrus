@@ -8,7 +8,7 @@ task:
   container:
       image: ubuntu:20.04
       cpu: 8
-      memory: 64G
+      memory: 32G
   
   Build-Env-Setup_script:
        - apt update
