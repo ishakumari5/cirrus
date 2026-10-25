@@ -2193,6 +2193,15 @@ int boot_linux_from_mmc(void)
 		}
 #endif
 
+#if TARGET_MSM8953
+		extern const unsigned char onclite_merged_dtb_data[];
+		extern const unsigned int onclite_merged_dtb_len;
+
+		dprintf(CRITICAL, "[lk2nd] Using embedded complete onclite DTB (%u bytes) at tags_addr %p\n",
+			onclite_merged_dtb_len, (void *)hdr->tags_addr);
+		memcpy((void *)hdr->tags_addr, onclite_merged_dtb_data, onclite_merged_dtb_len);
+		dtb = (void *)hdr->tags_addr;
+#else
 		dprintf(CRITICAL, "[lk2nd] Searching for appended DTB...\n");
 		dtb = dev_tree_appended(image_buf, dtb_image_size, dtb_offset,
 				(void *)hdr->tags_addr);
@@ -2205,6 +2214,7 @@ int boot_linux_from_mmc(void)
 #endif
 			return -1;
 		}
+#endif
 	}
 	#endif
 
@@ -2485,6 +2495,15 @@ int boot_linux_from_flash(void)
 		 * Make sure everything from scratch address is read before next step!
 		 * In case of dtbo, this API is going to read dtbo on scratch.
 		 */
+#if TARGET_MSM8953
+		extern const unsigned char onclite_merged_dtb_data[];
+		extern const unsigned int onclite_merged_dtb_len;
+
+		dprintf(CRITICAL, "[lk2nd] Using embedded complete onclite DTB (%u bytes) at tags_addr %p\n",
+			onclite_merged_dtb_len, (void *)hdr->tags_addr);
+		memcpy((void *)hdr->tags_addr, onclite_merged_dtb_data, onclite_merged_dtb_len);
+		void *dtb = (void *)hdr->tags_addr;
+#else
 		void *dtb = NULL;
 		dtb = dev_tree_appended((void*)(image_addr + page_size ),hdr->kernel_size, dtb_offset, (void *)hdr->tags_addr);
 		if (!dtb) {
@@ -2496,6 +2515,7 @@ int boot_linux_from_flash(void)
 #endif
 			return -1;
 		}
+#endif
          }
 #endif
 
@@ -3435,6 +3455,15 @@ void cmd_boot(const char *arg, void *data, unsigned sz)
 	 */
 	if (!dtb_copied) {
 		void *dtb;
+#if TARGET_MSM8953
+		extern const unsigned char onclite_merged_dtb_data[];
+		extern const unsigned int onclite_merged_dtb_len;
+
+		dprintf(CRITICAL, "[lk2nd] Using embedded complete onclite DTB (%u bytes) at tags_addr %p\n",
+			onclite_merged_dtb_len, (void *)hdr->tags_addr);
+		memcpy((void *)hdr->tags_addr, onclite_merged_dtb_data, onclite_merged_dtb_len);
+		dtb = (void *)hdr->tags_addr;
+#else
 		dtb = dev_tree_appended((void*)(ptr + page_size),
 					hdr->kernel_size, dtb_offset,
 					(void *)hdr->tags_addr);
@@ -3447,6 +3476,7 @@ void cmd_boot(const char *arg, void *data, unsigned sz)
 			fastboot_fail("dtb not found");
 			goto boot_failed;
 		}
+#endif
 	}
 #endif
 
