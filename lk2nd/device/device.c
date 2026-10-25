@@ -211,8 +211,24 @@ unsigned char *lk2nd_device_update_cmdline(const char *cmdline, enum boot_type b
 		cmdline = "lk2nd.compatible=" LK2ND_COMPATIBLE;
 #endif
 #if WITH_LK2ND_DEVICE_2ND
-	if (lk2nd_dev.cmdline)
-		return concat_cmdline(cmdline, lk2nd_dev.cmdline);
+	if (lk2nd_dev.cmdline) {
+		unsigned char *c = concat_cmdline(cmdline, lk2nd_dev.cmdline);
+#if TARGET_MSM8953
+		char *p = strstr((char *)c, "androidboot.dtb_idx=");
+		if (p) {
+			char *end = strchr(p, ' ');
+			char *new_c = malloc(strlen((char *)c) + 32);
+			if (new_c) {
+				size_t prefix_len = p - (char *)c;
+				memcpy(new_c, c, prefix_len);
+				sprintf(new_c + prefix_len, "androidboot.dtbo_idx=6 androidboot.dtb_idx=4%s", end ? end : "");
+				free(c);
+				c = (unsigned char *)new_c;
+			}
+		}
+#endif
+		return c;
+	}
 #endif
 	return update_cmdline(cmdline);
 }

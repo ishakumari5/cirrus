@@ -123,10 +123,20 @@ int get_dtbo_idx (void)
    return dtbo_idx;
 }
 
+void set_dtbo_idx (int idx)
+{
+   dtbo_idx = idx;
+}
+
 static int dtb_idx = INVALID_PTN;
 int get_dtb_idx (void)
 {
    return dtb_idx;
+}
+
+void set_dtb_idx (int idx)
+{
+   dtb_idx = idx;
 }
 
 int fdt_check_header_ext(const void *fdt)

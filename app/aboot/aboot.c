@@ -2196,10 +2196,20 @@ int boot_linux_from_mmc(void)
 #if TARGET_MSM8953
 		extern const unsigned char onclite_merged_dtb_data[];
 		extern const unsigned int onclite_merged_dtb_len;
+		extern void set_dtbo_idx(int idx);
+		extern void set_dtb_idx(int idx);
+		unsigned int dtb_out_len = 0;
+		unsigned int dtb_pos = 0;
 
-		dprintf(CRITICAL, "[lk2nd] Using embedded complete onclite DTB (%u bytes) at tags_addr %p\n",
+		dprintf(CRITICAL, "[lk2nd] Decompressing embedded onclite DTB (%u bytes) to tags_addr %p (mmc)\n",
 			onclite_merged_dtb_len, (void *)hdr->tags_addr);
-		memcpy((void *)hdr->tags_addr, onclite_merged_dtb_data, onclite_merged_dtb_len);
+		if (decompress((unsigned char *)onclite_merged_dtb_data, onclite_merged_dtb_len,
+				(unsigned char *)hdr->tags_addr, 0x200000, &dtb_pos, &dtb_out_len) != 0) {
+			dprintf(CRITICAL, "ERROR: Decompressing DTB failed!\n");
+			return -1;
+		}
+		set_dtbo_idx(6);
+		set_dtb_idx(4);
 		dtb = (void *)hdr->tags_addr;
 #else
 		dprintf(CRITICAL, "[lk2nd] Searching for appended DTB...\n");
@@ -2498,10 +2508,20 @@ int boot_linux_from_flash(void)
 #if TARGET_MSM8953
 		extern const unsigned char onclite_merged_dtb_data[];
 		extern const unsigned int onclite_merged_dtb_len;
+		extern void set_dtbo_idx(int idx);
+		extern void set_dtb_idx(int idx);
+		unsigned int dtb_out_len = 0;
+		unsigned int dtb_pos = 0;
 
-		dprintf(CRITICAL, "[lk2nd] Using embedded complete onclite DTB (%u bytes) at tags_addr %p\n",
+		dprintf(CRITICAL, "[lk2nd] Decompressing embedded onclite DTB (%u bytes) to tags_addr %p (flash)\n",
 			onclite_merged_dtb_len, (void *)hdr->tags_addr);
-		memcpy((void *)hdr->tags_addr, onclite_merged_dtb_data, onclite_merged_dtb_len);
+		if (decompress((unsigned char *)onclite_merged_dtb_data, onclite_merged_dtb_len,
+				(unsigned char *)hdr->tags_addr, 0x200000, &dtb_pos, &dtb_out_len) != 0) {
+			dprintf(CRITICAL, "ERROR: Decompressing DTB failed!\n");
+			return -1;
+		}
+		set_dtbo_idx(6);
+		set_dtb_idx(4);
 		void *dtb = (void *)hdr->tags_addr;
 #else
 		void *dtb = NULL;
@@ -3458,10 +3478,20 @@ void cmd_boot(const char *arg, void *data, unsigned sz)
 #if TARGET_MSM8953
 		extern const unsigned char onclite_merged_dtb_data[];
 		extern const unsigned int onclite_merged_dtb_len;
+		extern void set_dtbo_idx(int idx);
+		extern void set_dtb_idx(int idx);
+		unsigned int dtb_out_len = 0;
+		unsigned int dtb_pos = 0;
 
-		dprintf(CRITICAL, "[lk2nd] Using embedded complete onclite DTB (%u bytes) at tags_addr %p\n",
+		dprintf(CRITICAL, "[lk2nd] Decompressing embedded onclite DTB (%u bytes) to tags_addr %p (fastboot boot)\n",
 			onclite_merged_dtb_len, (void *)hdr->tags_addr);
-		memcpy((void *)hdr->tags_addr, onclite_merged_dtb_data, onclite_merged_dtb_len);
+		if (decompress((unsigned char *)onclite_merged_dtb_data, onclite_merged_dtb_len,
+				(unsigned char *)hdr->tags_addr, 0x200000, &dtb_pos, &dtb_out_len) != 0) {
+			dprintf(CRITICAL, "ERROR: Decompressing DTB failed!\n");
+			return;
+		}
+		set_dtbo_idx(6);
+		set_dtb_idx(4);
 		dtb = (void *)hdr->tags_addr;
 #else
 		dtb = dev_tree_appended((void*)(ptr + page_size),
