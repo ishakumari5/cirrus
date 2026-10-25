@@ -172,7 +172,7 @@
 - Xiaomi Redmi 5 (rosy)
 - Xiaomi Redmi 5 Plus (vince)
 - Xiaomi Redmi 6 Pro (sakura)
-- Xiaomi Redmi 7 (onclite) (requires flashing [minimal DTBO](#minimal-dtb-overlay))
+- Xiaomi Redmi 7 (onclite)
 - Xiaomi Redmi Note 4X Snapdragon (mido)
 - Xiaomi Redmi S2/Y2 (ysl)
 

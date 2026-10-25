@@ -66,6 +66,11 @@ static event_t dtbo_event;
 
 dtbo_error ret = DTBO_SUCCESS;
 
+#if TARGET_MSM8953
+extern const unsigned char onclite_panel_dtbo_data[];
+extern const unsigned int onclite_panel_dtbo_len;
+#endif
+
 struct dt_entry_v1
 {
 	uint32_t platform_id;
@@ -190,6 +195,11 @@ dtbo_error load_validate_dtbo_image(void **dtbo_buf, uint32_t *dtbo_image_sz)
 	int page_size = mmc_page_size();
 	struct dtbo_table_hdr *dtbo_table_header = NULL;
 	dtbo_error ret = DTBO_SUCCESS;
+
+#if TARGET_MSM8953
+extern const unsigned char onclite_panel_dtbo_data[];
+extern const unsigned int onclite_panel_dtbo_len;
+#endif
 	static bool dtbo_loaded = false;
 	static unsigned long long ptn_size = 0;
 	uint32_t recovery_dtbo_size = 0;
@@ -310,6 +320,20 @@ dtbo_error load_validate_dtbo_image(void **dtbo_buf, uint32_t *dtbo_image_sz)
 
 	/*Total size of dtbo */
 	dtbo_total_size = fdt32_to_cpu(dtbo_table_header->total_size);
+
+#if TARGET_MSM8953
+	if (dtbo_total_size < 1024)
+	{
+		dprintf(CRITICAL, "[lk2nd] Flashed DTBO is null/stub (%u bytes). Using embedded panel DTBO!\n",
+			(unsigned int)dtbo_total_size);
+		dtbo_image_buf = (void *)onclite_panel_dtbo_data;
+		ptn_size = onclite_panel_dtbo_len;
+		dtbo_partition_size = onclite_panel_dtbo_len;
+		dtbo_table_header = (struct dtbo_table_hdr *)dtbo_image_buf;
+		dtbo_total_size = fdt32_to_cpu(dtbo_table_header->total_size);
+	}
+#endif
+
 	if (dtbo_total_size > dtbo_partition_size || dtbo_total_size == 0)
 	{
 		dprintf(CRITICAL, "dtbo table total size exceeded the dtbo buffer allocated\n");
@@ -769,6 +793,10 @@ void *get_board_dtb(void *dtbo_image_buf, uint32_t dtbo_image_sz)
 
 		if (find_best_dtb) {
 			dtbo_idx = dtbo_count;
+#if TARGET_MSM8953
+			if (dtbo_image_buf == (void *)onclite_panel_dtbo_data)
+				dtbo_idx = 6;
+#endif
 		}
 	}
 	if (!best_dtb_info.dtb) {
@@ -845,11 +873,17 @@ if (DEBUGLEVEL >= SPEW) {
 	* if board-id is present then the DTB is version 2 */
 	pmic_prop = (const char *)fdt_getprop(dtb, root_offset, "qcom,pmic-id", &len_pmic_id);
 	board_prop = (const char *)fdt_getprop(dtb, root_offset, "qcom,board-id", &len_board_id);
-	if (pmic_prop && (len_pmic_id > 0) && board_prop && (len_board_id > 0)) {
-		if ((len_pmic_id % PMIC_ID_SIZE) || (len_board_id % BOARD_ID_SIZE))
+	if (pmic_prop && (len_pmic_id > 0)) {
+		if (len_pmic_id % PMIC_ID_SIZE)
 		{
-			dprintf(CRITICAL, "qcom,pmic-id(%d) or qcom,board-id(%d) in device tree is not a multiple of (%d %d)\n",
-				len_pmic_id, len_board_id, PMIC_ID_SIZE, BOARD_ID_SIZE);
+			dprintf(CRITICAL, "qcom,pmic-id(%d) in device tree is not a multiple of (%d)\n",
+				len_pmic_id, PMIC_ID_SIZE);
+			return false;
+		}
+		if (board_prop && (len_board_id > 0) && (len_board_id % BOARD_ID_SIZE))
+		{
+			dprintf(CRITICAL, "qcom,board-id(%d) in device tree is not a multiple of (%d)\n",
+				len_board_id, BOARD_ID_SIZE);
 			return false;
 		}
 		dtb_ver = DEV_TREE_VERSION_V3;
@@ -864,8 +898,14 @@ if (DEBUGLEVEL >= SPEW) {
 		dtb_ver = DEV_TREE_VERSION_V2;
 		min_plat_id_len = PLAT_ID_SIZE;
 	} else {
-		dtb_ver = DEV_TREE_VERSION_V1;
-		min_plat_id_len = DT_ENTRY_V1_SIZE;
+		plat_prop = (const char *)fdt_getprop(dtb, root_offset, "qcom,msm-id", &len_plat_id);
+		if (plat_prop && len_plat_id > 0 && (len_plat_id % PLAT_ID_SIZE == 0) && (len_plat_id % DT_ENTRY_V1_SIZE != 0)) {
+			dtb_ver = DEV_TREE_VERSION_V2;
+			min_plat_id_len = PLAT_ID_SIZE;
+		} else {
+			dtb_ver = DEV_TREE_VERSION_V1;
+			min_plat_id_len = DT_ENTRY_V1_SIZE;
+		}
 	}
 
 	/* Get the msm-id prop from DTB */
@@ -960,10 +1000,10 @@ if (DEBUGLEVEL >= SPEW) {
 	 * Extract the data & prepare a look up table
 	 */
 	else if (dtb_ver == DEV_TREE_VERSION_V2 || dtb_ver == DEV_TREE_VERSION_V3) {
-		board_data_count = (len_board_id / BOARD_ID_SIZE);
+		board_data_count = (board_prop && len_board_id > 0) ? (len_board_id / BOARD_ID_SIZE) : 1;
 		msm_data_count = (len_plat_id / PLAT_ID_SIZE);
 		/* If dtb version is v2.0, the pmic_data_count will be <= 0 */
-		pmic_data_count = (len_pmic_id / PMIC_ID_SIZE);
+		pmic_data_count = (pmic_prop && len_pmic_id > 0) ? (len_pmic_id / PMIC_ID_SIZE) : 0;
 
 #if WITH_LK2ND_DEVICE
 		/* Cannot override with more than one entry */
@@ -977,36 +1017,41 @@ if (DEBUGLEVEL >= SPEW) {
 		/* If we are using dtb v3.0, then we have split board, msm & pmic data in the DTB
 		*  If we are using dtb v2.0, then we have split board & msmdata in the DTB
 		*/
-		board_data = (struct board_id *) malloc(sizeof(struct board_id) * (len_board_id / BOARD_ID_SIZE));
+		board_data = (struct board_id *) malloc(sizeof(struct board_id) * board_data_count);
 		ASSERT(board_data);
 		platform_data = (struct plat_id *) malloc(sizeof(struct plat_id) * (len_plat_id / PLAT_ID_SIZE));
 		ASSERT(platform_data);
-		if (dtb_ver == DEV_TREE_VERSION_V3) {
-			pmic_data = (struct pmic_id *) malloc(sizeof(struct pmic_id) * (len_pmic_id / PMIC_ID_SIZE));
+		if (dtb_ver == DEV_TREE_VERSION_V3 && pmic_data_count > 0) {
+			pmic_data = (struct pmic_id *) malloc(sizeof(struct pmic_id) * pmic_data_count);
 			ASSERT(pmic_data);
 		}
 		i = 0;
 
-		/* Extract board data from DTB */
-		for(i = 0 ; i < board_data_count; i++) {
-			board_data[i].variant_id = fdt32_to_cpu(((struct board_id *)board_prop)->variant_id);
-			board_data[i].platform_subtype = fdt32_to_cpu(((struct board_id *)board_prop)->platform_subtype);
-			/* For V2/V3 version of DTBs we have platform version field as part
-			 * of variant ID, in such case the subtype will be mentioned as 0x0
-			 * As the qcom, board-id = <0xSSPMPmPH, 0x0>
-			 * SS -- Subtype
-			 * PM -- Platform major version
-			 * Pm -- Platform minor version
-			 * PH -- Platform hardware CDP/MTP
-			 * In such case to make it compatible with LK algorithm move the subtype
-			 * from variant_id to subtype field
-			 */
-			if (board_data[i].platform_subtype == 0)
-				board_data[i].platform_subtype =
-					fdt32_to_cpu(((struct board_id *)board_prop)->variant_id) >> 0x18;
+		/* Extract board data from DTB, or use board target ID as wildcard if qcom,board-id not present */
+		if (!board_prop || len_board_id <= 0) {
+			board_data[0].variant_id = board_target_id();
+			board_data[0].platform_subtype = board_hardware_subtype();
+		} else {
+			for(i = 0 ; i < board_data_count; i++) {
+				board_data[i].variant_id = fdt32_to_cpu(((struct board_id *)board_prop)->variant_id);
+				board_data[i].platform_subtype = fdt32_to_cpu(((struct board_id *)board_prop)->platform_subtype);
+				/* For V2/V3 version of DTBs we have platform version field as part
+				 * of variant ID, in such case the subtype will be mentioned as 0x0
+				 * As the qcom, board-id = <0xSSPMPmPH, 0x0>
+				 * SS -- Subtype
+				 * PM -- Platform major version
+				 * Pm -- Platform minor version
+				 * PH -- Platform hardware CDP/MTP
+				 * In such case to make it compatible with LK algorithm move the subtype
+				 * from variant_id to subtype field
+				 */
+				if (board_data[i].platform_subtype == 0)
+					board_data[i].platform_subtype =
+						fdt32_to_cpu(((struct board_id *)board_prop)->variant_id) >> 0x18;
 
-			len_board_id -= sizeof(struct board_id);
-			board_prop += sizeof(struct board_id);
+				len_board_id -= sizeof(struct board_id);
+				board_prop += sizeof(struct board_id);
+			}
 		}
 
 		/* Extract platform data from DTB */
@@ -1017,7 +1062,7 @@ if (DEBUGLEVEL >= SPEW) {
 			plat_prop += sizeof(struct plat_id);
 		}
 
-		if (dtb_ver == DEV_TREE_VERSION_V3 && pmic_prop) {
+		if (dtb_ver == DEV_TREE_VERSION_V3 && pmic_data_count > 0 && pmic_prop) {
 			/* Extract pmic data from DTB */
 			for(i = 0 ; i < pmic_data_count; i++) {
 				pmic_data[i].pmic_version[0]= fdt32_to_cpu(((struct pmic_id *)pmic_prop)->pmic_version[0]);
@@ -1035,8 +1080,8 @@ if (DEBUGLEVEL >= SPEW) {
 			num_entries = msm_data_count * board_data_count;
 		}
 
-		if ((((uint64_t)msm_data_count * (uint64_t)board_data_count * (uint64_t)pmic_data_count) !=
-			msm_data_count * board_data_count * pmic_data_count) ||
+		if ((((uint64_t)msm_data_count * (uint64_t)board_data_count * (uint64_t)(pmic_data_count ? pmic_data_count : 1)) !=
+			msm_data_count * board_data_count * (pmic_data_count ? pmic_data_count : 1)) ||
 			(((uint64_t)msm_data_count * (uint64_t)board_data_count) != msm_data_count * board_data_count)) {
 
 			free(board_data);
@@ -1064,7 +1109,7 @@ if (DEBUGLEVEL >= SPEW) {
 		for (i = 0; i < msm_data_count; i++) {
 			for (j = 0; j < board_data_count; j++) {
 				dt_entry_array[k].idx = dtb_count;
-				if (dtb_ver == DEV_TREE_VERSION_V3 && pmic_prop){
+				if (dtb_ver == DEV_TREE_VERSION_V3 && pmic_data_count > 0 && pmic_data){
 					for (n = 0; n < pmic_data_count; n++) {
 						dt_entry_array[k].platform_id = platform_data[i].platform_id;
 						dt_entry_array[k].soc_rev = platform_data[i].soc_rev;
@@ -1303,8 +1348,9 @@ void *dev_tree_appended(void *kernel, uint32_t kernel_size, uint32_t dtb_offset,
 #endif
 	if (ret == DTBO_SUCCESS)
 		return tags;
-	else if (ret == DTBO_ERROR)
-		return NULL;
+	else if (ret == DTBO_ERROR) {
+		dprintf(CRITICAL, "[lk2nd] DTBO overlay not applied (err=%d), falling back to raw DTB\n", ret);
+	}
 
 	/* Initialize the dtb entry node*/
 	dt_entry_queue = (struct dt_entry_node *)

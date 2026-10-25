@@ -1658,6 +1658,8 @@ int boot_linux_from_mmc(void)
 	index = partition_get_index(ptn_name);
 	ptn = partition_get_offset(index);
 	image_size = partition_get_size(index);
+	dprintf(CRITICAL, "[lk2nd] Booting partition '%s': idx=%d, ptn_offset=0x%llx, size=0x%llx\n",
+		ptn_name, index, ptn, image_size);
 	if(ptn == 0 || image_size == 0) {
 		dprintf(CRITICAL, "ERROR: No %s partition found\n", ptn_name);
 		return -1;
@@ -1667,14 +1669,23 @@ int boot_linux_from_mmc(void)
 	mmc_set_lun(partition_get_lun(index));
 
 	if (mmc_read(ptn + offset, (uint32_t *) buf, page_size)) {
-		dprintf(CRITICAL, "ERROR: Cannot read boot image header\n");
+		dprintf(CRITICAL, "ERROR: Cannot read boot image header from 0x%llx\n", ptn + offset);
                 return -1;
 	}
 
 	if (memcmp(hdr->magic, BOOT_MAGIC, BOOT_MAGIC_SIZE)) {
-		dprintf(CRITICAL, "ERROR: Invalid boot image header\n");
+		dprintf(CRITICAL, "ERROR: Invalid boot magic at 0x%llx! Read: '%.8s' (expected '%s')\n",
+			ptn + offset, (char *)hdr->magic, BOOT_MAGIC);
                 return ERR_INVALID_BOOT_MAGIC;
 	}
+
+#if OSVERSION_IN_BOOTIMAGE
+	dprintf(CRITICAL, "[lk2nd] Valid boot header! ksz=%u rsz=%u psz=%u v=%u\n",
+		hdr->kernel_size, hdr->ramdisk_size, hdr->page_size, hdr->header_version);
+#else
+	dprintf(CRITICAL, "[lk2nd] Valid boot header! ksz=%u rsz=%u psz=%u dt_sz=%u\n",
+		hdr->kernel_size, hdr->ramdisk_size, hdr->page_size, hdr->dt_size);
+#endif
 
 	if (hdr->page_size && (hdr->page_size != page_size)) {
 
@@ -2110,71 +2121,51 @@ int boot_linux_from_mmc(void)
 #endif
 
 	#if DEVICE_TREE
-	if(dt_size) {
+	bool qcdt_loaded = false;
+	if(dt_size >= sizeof(struct dt_table)) {
 		dt_table_offset = ((uint32_t)image_addr + page_size + kernel_actual + ramdisk_actual + second_actual);
 		table = (struct dt_table*) dt_table_offset;
 
-		if (dev_tree_validate(table, hdr->page_size, &dt_hdr_size) != 0) {
-			dprintf(CRITICAL, "ERROR: Cannot validate Device Tree Table \n");
-			return -1;
-		}
-
-		/* Its Error if, dt_hdr_size (table->num_entries * dt_entry size + Dev_Tree Header)
-		goes beyound hdr->dt_size*/
-		if (dt_hdr_size > ROUND_TO_PAGE(dt_size,hdr->page_size)) {
-			dprintf(CRITICAL, "ERROR: Invalid Device Tree size \n");
-			return -1;
-		}
-
-		/* Find index of device tree within device tree table */
-		if(dev_tree_get_entry_info(table, &dt_entry) != 0){
-			dprintf(CRITICAL, "ERROR: Getting device tree address failed\n");
-			return -1;
-		}
-
-		if(dt_entry.offset > (UINT_MAX - dt_entry.size)) {
-			dprintf(CRITICAL, "ERROR: Device tree contents are Invalid\n");
-			return -1;
-		}
-
-		/* Ensure we are not overshooting dt_size with the dt_entry selected */
-		if ((dt_entry.offset + dt_entry.size) > dt_size) {
-			dprintf(CRITICAL, "ERROR: Device tree contents are Invalid\n");
-			return -1;
-		}
-
-		if (is_gzip_package((unsigned char *)dt_table_offset + dt_entry.offset, dt_entry.size))
+		if (dev_tree_validate(table, hdr->page_size, &dt_hdr_size) == 0 &&
+		    dt_hdr_size <= ROUND_TO_PAGE(dt_size, hdr->page_size) &&
+		    dev_tree_get_entry_info(table, &dt_entry) == 0 &&
+		    dt_entry.offset <= (UINT_MAX - dt_entry.size) &&
+		    (dt_entry.offset + dt_entry.size) <= dt_size)
 		{
-			unsigned int compressed_size = 0;
-			out_addr += out_len;
-			out_avai_len -= out_len;
-			dprintf(INFO, "decompressing dtb: start\n");
-			rc = decompress((unsigned char *)dt_table_offset + dt_entry.offset,
-					dt_entry.size, out_addr, out_avai_len,
-					&compressed_size, &dtb_size);
-			if (rc)
+			if (is_gzip_package((unsigned char *)dt_table_offset + dt_entry.offset, dt_entry.size))
 			{
-				dprintf(CRITICAL, "decompressing dtb failed!!!\n");
-				ASSERT(0);
+				unsigned int compressed_size = 0;
+				out_addr += out_len;
+				out_avai_len -= out_len;
+				dprintf(INFO, "decompressing dtb: start\n");
+				rc = decompress((unsigned char *)dt_table_offset + dt_entry.offset,
+						dt_entry.size, out_addr, out_avai_len,
+						&compressed_size, &dtb_size);
+				if (rc)
+				{
+					dprintf(CRITICAL, "decompressing dtb failed!!!\n");
+					ASSERT(0);
+				}
+
+				dprintf(INFO, "decompressing dtb: done\n");
+				best_match_dt_addr = out_addr;
+			} else {
+				best_match_dt_addr = (unsigned char *)dt_table_offset + dt_entry.offset;
+				dtb_size = dt_entry.size;
 			}
 
-			dprintf(INFO, "decompressing dtb: done\n");
-			best_match_dt_addr = out_addr;
+			/* Validate and Read device device tree in the tags_addr */
+			if (!check_aboot_addr_range_overlap(hdr->tags_addr, dtb_size) &&
+				!check_ddr_addr_range_bound(hdr->tags_addr, dtb_size))
+			{
+				memmove((void *)hdr->tags_addr, (char *)best_match_dt_addr, dtb_size);
+				qcdt_loaded = true;
+			}
 		} else {
-			best_match_dt_addr = (unsigned char *)dt_table_offset + dt_entry.offset;
-			dtb_size = dt_entry.size;
+			dprintf(INFO, "[lk2nd] QCDT validation skipped or failed, falling back to appended DTB\n");
 		}
-
-		/* Validate and Read device device tree in the tags_addr */
-		if (check_aboot_addr_range_overlap(hdr->tags_addr, dtb_size) ||
-			check_ddr_addr_range_bound(hdr->tags_addr, dtb_size))
-		{
-			dprintf(CRITICAL, "Device tree addresses are not valid\n");
-			return -1;
-		}
-
-		memmove((void *)hdr->tags_addr, (char *)best_match_dt_addr, dtb_size);
-	} else {
+	}
+	if (!qcdt_loaded) {
 		/* Validate the tags_addr */
 		if (check_aboot_addr_range_overlap(hdr->tags_addr, kernel_actual) ||
 			check_ddr_addr_range_bound(hdr->tags_addr, kernel_actual))
@@ -2202,6 +2193,7 @@ int boot_linux_from_mmc(void)
 		}
 #endif
 
+		dprintf(CRITICAL, "[lk2nd] Searching for appended DTB...\n");
 		dtb = dev_tree_appended(image_buf, dtb_image_size, dtb_offset,
 				(void *)hdr->tags_addr);
 		if (!dtb) {
@@ -4662,8 +4654,13 @@ void cmd_flash(const char *arg, void *data, unsigned sz)
 
 void cmd_continue(const char *arg, void *data, unsigned sz)
 {
+	int ret = 0;
+
 	fastboot_okay("");
 	fastboot_stop();
+
+	dprintf(CRITICAL, "\n[lk2nd] Continuing boot (target: %s)...\n",
+		boot_into_recovery ? "recovery" : "boot");
 
 	if (target_is_emmc_boot())
 	{
@@ -4675,12 +4672,19 @@ void cmd_continue(const char *arg, void *data, unsigned sz)
 		if (!boot_into_recovery)
 			lk2nd_boot();
 #endif
-		boot_linux_from_mmc();
+		ret = boot_linux_from_mmc();
 	}
 	else
 	{
-		boot_linux_from_flash();
+		ret = boot_linux_from_flash();
 	}
+
+	dprintf(CRITICAL, "\n========================================\n");
+	dprintf(CRITICAL, "[lk2nd] Boot %s failed! (ret=%d)\n",
+		boot_into_recovery ? "recovery" : "boot", ret);
+	dprintf(CRITICAL, "========================================\n");
+	dprintf(CRITICAL, "Pausing for 10 seconds before returning to menu...\n");
+	thread_sleep(10000);
 }
 
 void cmd_reboot(const char *arg, void *data, unsigned sz)
