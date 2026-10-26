@@ -14,3 +14,10 @@ ncscope.*
 # clangd
 .cache
 compile_commands.json
+
+# Debug logs and local boot images
+boot
+emmc_appsboot.mbn
+last_kmsg
+logcat.txt
+ramoops.log

@@ -217,13 +217,13 @@ unsigned char *lk2nd_device_update_cmdline(const char *cmdline, enum boot_type b
 		char *p = strstr((char *)c, "androidboot.dtb_idx=");
 		if (p) {
 			char *end = strchr(p, ' ');
-			char *new_c = malloc(strlen((char *)c) + 32);
-			if (new_c) {
-				size_t prefix_len = p - (char *)c;
-				memcpy(new_c, c, prefix_len);
-				sprintf(new_c + prefix_len, "androidboot.dtbo_idx=6 androidboot.dtb_idx=4%s", end ? end : "");
-				free(c);
-				c = (unsigned char *)new_c;
+			if (end) {
+				memmove(p, end + 1, strlen(end + 1) + 1);
+			} else {
+				if (p > (char *)c && *(p - 1) == ' ')
+					*(p - 1) = '\0';
+				else
+					*p = '\0';
 			}
 		}
 #endif

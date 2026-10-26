@@ -2194,23 +2194,13 @@ int boot_linux_from_mmc(void)
 #endif
 
 #if TARGET_MSM8953
-		extern const unsigned char onclite_merged_dtb_data[];
-		extern const unsigned int onclite_merged_dtb_len;
-		extern void set_dtbo_idx(int idx);
-		extern void set_dtb_idx(int idx);
-		unsigned int dtb_out_len = 0;
-		unsigned int dtb_pos = 0;
-
-		dprintf(CRITICAL, "[lk2nd] Decompressing embedded onclite DTB (%u bytes) to tags_addr %p (mmc)\n",
-			onclite_merged_dtb_len, (void *)hdr->tags_addr);
-		if (decompress((unsigned char *)onclite_merged_dtb_data, onclite_merged_dtb_len,
-				(unsigned char *)hdr->tags_addr, 0x200000, &dtb_pos, &dtb_out_len) != 0) {
-			dprintf(CRITICAL, "ERROR: Decompressing DTB failed!\n");
+		dprintf(CRITICAL, "[lk2nd] Appended DTB search with DTBO overlay...\n");
+		dtb = dev_tree_appended(image_buf, dtb_image_size, dtb_offset,
+				(void *)hdr->tags_addr);
+		if (!dtb) {
+			dprintf(CRITICAL, "ERROR: Appended Device Tree Blob not found\n");
 			return -1;
 		}
-		set_dtbo_idx(6);
-		set_dtb_idx(4);
-		dtb = (void *)hdr->tags_addr;
 #else
 		dprintf(CRITICAL, "[lk2nd] Searching for appended DTB...\n");
 		dtb = dev_tree_appended(image_buf, dtb_image_size, dtb_offset,
@@ -2506,23 +2496,12 @@ int boot_linux_from_flash(void)
 		 * In case of dtbo, this API is going to read dtbo on scratch.
 		 */
 #if TARGET_MSM8953
-		extern const unsigned char onclite_merged_dtb_data[];
-		extern const unsigned int onclite_merged_dtb_len;
-		extern void set_dtbo_idx(int idx);
-		extern void set_dtb_idx(int idx);
-		unsigned int dtb_out_len = 0;
-		unsigned int dtb_pos = 0;
-
-		dprintf(CRITICAL, "[lk2nd] Decompressing embedded onclite DTB (%u bytes) to tags_addr %p (flash)\n",
-			onclite_merged_dtb_len, (void *)hdr->tags_addr);
-		if (decompress((unsigned char *)onclite_merged_dtb_data, onclite_merged_dtb_len,
-				(unsigned char *)hdr->tags_addr, 0x200000, &dtb_pos, &dtb_out_len) != 0) {
-			dprintf(CRITICAL, "ERROR: Decompressing DTB failed!\n");
+		dprintf(CRITICAL, "[lk2nd] Appended DTB search with DTBO overlay (flash)...\n");
+		void *dtb = dev_tree_appended((void*)(image_addr + page_size ),hdr->kernel_size, dtb_offset, (void *)hdr->tags_addr);
+		if (!dtb) {
+			dprintf(CRITICAL, "ERROR: Appended Device Tree Blob not found\n");
 			return -1;
 		}
-		set_dtbo_idx(6);
-		set_dtb_idx(4);
-		void *dtb = (void *)hdr->tags_addr;
 #else
 		void *dtb = NULL;
 		dtb = dev_tree_appended((void*)(image_addr + page_size ),hdr->kernel_size, dtb_offset, (void *)hdr->tags_addr);
@@ -3476,23 +3455,14 @@ void cmd_boot(const char *arg, void *data, unsigned sz)
 	if (!dtb_copied) {
 		void *dtb;
 #if TARGET_MSM8953
-		extern const unsigned char onclite_merged_dtb_data[];
-		extern const unsigned int onclite_merged_dtb_len;
-		extern void set_dtbo_idx(int idx);
-		extern void set_dtb_idx(int idx);
-		unsigned int dtb_out_len = 0;
-		unsigned int dtb_pos = 0;
-
-		dprintf(CRITICAL, "[lk2nd] Decompressing embedded onclite DTB (%u bytes) to tags_addr %p (fastboot boot)\n",
-			onclite_merged_dtb_len, (void *)hdr->tags_addr);
-		if (decompress((unsigned char *)onclite_merged_dtb_data, onclite_merged_dtb_len,
-				(unsigned char *)hdr->tags_addr, 0x200000, &dtb_pos, &dtb_out_len) != 0) {
-			dprintf(CRITICAL, "ERROR: Decompressing DTB failed!\n");
-			return;
+		dprintf(CRITICAL, "[lk2nd] Appended DTB search with DTBO overlay (boot)...\n");
+		dtb = dev_tree_appended((void*)(ptr + page_size),
+					hdr->kernel_size, dtb_offset,
+					(void *)hdr->tags_addr);
+		if (!dtb) {
+			fastboot_fail("dtb not found");
+			goto boot_failed;
 		}
-		set_dtbo_idx(6);
-		set_dtb_idx(4);
-		dtb = (void *)hdr->tags_addr;
 #else
 		dtb = dev_tree_appended((void*)(ptr + page_size),
 					hdr->kernel_size, dtb_offset,

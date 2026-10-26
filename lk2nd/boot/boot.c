@@ -35,6 +35,10 @@ static void lk2nd_scan_devices(void)
 		if (!bdev->is_leaf)
 			continue;
 
+		/* Skip internal eMMC wrapper partitions to avoid slow ext2 probes */
+		if (!strncmp(bdev->name, "wrp0", 4))
+			continue;
+
 		/*
 		 * Skip partitions that are too small to have a boot fs on.
 		 *

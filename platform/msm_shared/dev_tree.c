@@ -303,6 +303,18 @@ extern const unsigned int onclite_panel_dtbo_len;
 	/* validate the dtbo image, before reading complete image */
 	dtbo_table_header = (struct dtbo_table_hdr *)dtbo_image_buf;
 
+#if TARGET_MSM8953
+	if (fdt32_to_cpu(dtbo_table_header->magic) != DTBO_TABLE_MAGIC ||
+	    fdt32_to_cpu(dtbo_table_header->total_size) < 1024)
+	{
+		dprintf(CRITICAL, "[lk2nd] Flashed DTBO is null/stub or invalid magic. Using embedded panel DTBO fallback!\n");
+		dtbo_image_buf = (void *)onclite_panel_dtbo_data;
+		ptn_size = onclite_panel_dtbo_len;
+		dtbo_partition_size = onclite_panel_dtbo_len;
+		dtbo_table_header = (struct dtbo_table_hdr *)dtbo_image_buf;
+	}
+#endif
+
 	/*Check for dtbo magic*/
 	if (fdt32_to_cpu(dtbo_table_header->magic) != DTBO_TABLE_MAGIC)
 	{
@@ -330,19 +342,6 @@ extern const unsigned int onclite_panel_dtbo_len;
 
 	/*Total size of dtbo */
 	dtbo_total_size = fdt32_to_cpu(dtbo_table_header->total_size);
-
-#if TARGET_MSM8953
-	if (dtbo_total_size < 1024)
-	{
-		dprintf(CRITICAL, "[lk2nd] Flashed DTBO is null/stub (%u bytes). Using embedded panel DTBO!\n",
-			(unsigned int)dtbo_total_size);
-		dtbo_image_buf = (void *)onclite_panel_dtbo_data;
-		ptn_size = onclite_panel_dtbo_len;
-		dtbo_partition_size = onclite_panel_dtbo_len;
-		dtbo_table_header = (struct dtbo_table_hdr *)dtbo_image_buf;
-		dtbo_total_size = fdt32_to_cpu(dtbo_table_header->total_size);
-	}
-#endif
 
 	if (dtbo_total_size > dtbo_partition_size || dtbo_total_size == 0)
 	{
@@ -707,10 +706,12 @@ void *get_soc_dtb(void *kernel, void *tags, uint32_t kernel_size, uint32_t dtb_o
 		find_best_dtb = dtb_read_find_match(&cur_dtb_info, &best_dtb_info, SOC_MATCH);
 		if (cur_dtb_info.dt_match_val) {
 			if (cur_dtb_info.dt_match_val & BIT(SOC_MATCH)) {
+#if !TARGET_MSM8953
 				if (check_all_bits_set(cur_dtb_info.dt_match_val)) {
 					dprintf(CRITICAL, "Exact DTB match found. dtbo search is not required\n");
 					dtbo_needed = false;
 				}
+#endif
 			}
 		}
 
