@@ -259,7 +259,7 @@
 !if $(USE_UART) == 1
   SerialPortLib|Silicon/Qualcomm/QcomPkg/Library/QcomGeniSerialPortLib/QcomGeniSerialPortLib.inf
 !else
-  SerialPortLib|Silicon/Qualcomm/QcomPkg/Library/FrameBufferSerialPortLib/FrameBufferSerialPortLib.inf
+  SerialPortLib|MdePkg/Library/BaseSerialPortLibNull/BaseSerialPortLibNull.inf
 !endif
 
 !if $(AB_SLOTS_SUPPORT) == TRUE
@@ -378,11 +378,7 @@
     !if $(USE_UART) == 1
       SerialPortLib|Silicon/Qualcomm/QcomPkg/Library/QcomGeniSerialPortLib/QcomGeniSerialPortLib.inf
     !else
-    !if $(NO_EXCEPTION_DISPLAY) == TRUE
-      SerialPortLib|Common/edk2/MdePkg/Library/BaseSerialPortLibNull/BaseSerialPortLibNull.inf
-    !else
-      SerialPortLib|Silicon/Qualcomm/QcomPkg/Library/FrameBufferSerialPortLib/FrameBufferSerialPortLib.inf
-    !endif
+      SerialPortLib|MdePkg/Library/BaseSerialPortLibNull/BaseSerialPortLibNull.inf
     !endif
   }
   ArmPkg/Drivers/TimerDxe/TimerDxe.inf
