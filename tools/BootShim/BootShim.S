@@ -44,6 +44,24 @@ _StackSize:
 	.quad UEFI_SIZE
 
 _Start:
+	/* Checkpoint 1: BootShim Entry from lk2nd (Paint 40 rows BLUE) */
+	movz	x7, #0x9000, lsl #16
+	movz	x8, #0x00FF
+	orr	x8, x8, x8, lsl #32
+	movz	x9, #(720 * 40 / 2)
+.Lpaint_blue:
+	str	x8, [x7], #8
+	subs	x9, x9, #1
+	b.ne	.Lpaint_blue
+
+	movz	x7, #0x1000
+	movk	x7, #0x9000, lsl #16
+	movz	x9, #(720 * 40 / 2)
+.Lpaint_blue2:
+	str	x8, [x7], #8
+	subs	x9, x9, #1
+	b.ne	.Lpaint_blue2
+
 	mov	x4, x1
 	ldr	x5, _StackBase
 	cmp	x4, x5
@@ -58,6 +76,25 @@ _CopyLoop:
 	ldr	x5, _StackBase
 
 _Entry:
+	/* Checkpoint 2: BootShim Relocation Done (Paint 40 rows GREEN) */
+	movz	x7, #(2880 * 40) & 0xFFFF
+	movk	x7, #(0x90000000 + (2880 * 40)) >> 16, lsl #16
+	movz	x8, #0xFF00
+	orr	x8, x8, x8, lsl #32
+	movz	x9, #(720 * 40 / 2)
+.Lpaint_green:
+	str	x8, [x7], #8
+	subs	x9, x9, #1
+	b.ne	.Lpaint_green
+
+	movz	x7, #(0x1000 + (2880 * 40)) & 0xFFFF
+	movk	x7, #(0x90000000 + 0x1000 + (2880 * 40)) >> 16, lsl #16
+	movz	x9, #(720 * 40 / 2)
+.Lpaint_green2:
+	str	x8, [x7], #8
+	subs	x9, x9, #1
+	b.ne	.Lpaint_green2
+
 	br	x5
 
 _Dead:

@@ -72,15 +72,16 @@
   gEfiMdePkgTokenSpaceGuid.PcdMaximumLinkedListLength|1000000
   gEfiMdePkgTokenSpaceGuid.PcdSpinLockTimeout|10000000
   gEfiMdePkgTokenSpaceGuid.PcdDebugClearMemoryValue|0xAF
-  gEfiMdePkgTokenSpaceGuid.PcdPerformanceLibraryPropertyMask|1
+  gEfiMdePkgTokenSpaceGuid.PcdPerformanceLibraryPropertyMask|0
   gEfiMdePkgTokenSpaceGuid.PcdPostCodePropertyMask|0
   gEfiMdePkgTokenSpaceGuid.PcdUefiLibMaxPrintBufferSize|8000
 !if $(TARGET) == RELEASE
   gEfiMdePkgTokenSpaceGuid.PcdDebugPropertyMask|0x0e
   gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0x80000000
 !else
-  gEfiMdePkgTokenSpaceGuid.PcdDebugPropertyMask|0x0f
-  gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0x800B05C7
+  gEfiMdePkgTokenSpaceGuid.PcdDebugPropertyMask|0x2f
+  # 0x800000CF = DEBUG_ERROR | DEBUG_DISPATCH | DEBUG_INFO | DEBUG_WARN | DEBUG_LOAD | DEBUG_INIT
+  gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0x800000CF
 !endif
 # Use 0x807B55FF to enable all debug messages
   gEfiMdePkgTokenSpaceGuid.PcdReportStatusCodePropertyMask|0x06
@@ -281,7 +282,7 @@
   ReportStatusCodeLib|MdeModulePkg/Library/DxeReportStatusCodeLib/DxeReportStatusCodeLib.inf
   ExtractGuidedSectionLib|MdePkg/Library/DxeExtractGuidedSectionLib/DxeExtractGuidedSectionLib.inf
   UefiDecompressLib|MdePkg/Library/BaseUefiDecompressLib/BaseUefiDecompressLib.inf
-  PerformanceLib|MdeModulePkg/Library/DxeCorePerformanceLib/DxeCorePerformanceLib.inf
+  PerformanceLib|MdePkg/Library/BasePerformanceLibNull/BasePerformanceLibNull.inf
 
 [LibraryClasses.common.DXE_DRIVER]
   ArmGicArchLib|ArmPkg/Library/ArmGicArchLib/ArmGicArchLib.inf

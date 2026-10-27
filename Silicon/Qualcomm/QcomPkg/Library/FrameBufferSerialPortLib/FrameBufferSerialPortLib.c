@@ -24,6 +24,25 @@ UINTN gHeight = FixedPcdGet32(PcdMipiFrameBufferHeight);
 UINTN gBpp    = FixedPcdGet32(PcdMipiFrameBufferPixelBpp);
 UINTN delay = FixedPcdGet32(PcdMipiFrameBufferDelay);
 
+STATIC inline VOID PetAndDisableWatchdog(VOID)
+{
+  *(volatile UINT32 *)(UINTN)0x0B017010 = 0xFFFFFFFF; // Max bark time
+  *(volatile UINT32 *)(UINTN)0x0B017014 = 0xFFFFFFFF; // Max bite time (36 hours)
+  *(volatile UINT32 *)(UINTN)0x0B017008 = 0;          // WDT0_EN = 0 (DISABLE)
+  *(volatile UINT32 *)(UINTN)0x0B017004 = 1;          // WDT0_RST = 1 (PET)
+  *(volatile UINT32 *)(UINTN)0x0B017000 = 1;          // Pet offset 0
+}
+
+STATIC VOID SafeDelayMs(UINTN Milliseconds)
+{
+  UINTN Count = Milliseconds / 50;
+  if (Count == 0) Count = 1;
+  for (UINTN i = 0; i < Count; i++) {
+    PetAndDisableWatchdog();
+    MicroSecondDelay(50000);
+  }
+}
+
 // Module-used internal routine
 void FbConPutCharWithFactor(char c, int type, unsigned scale_factor);
 
@@ -80,15 +99,32 @@ void ResetFb(void)
   }
 }
 
+STATIC inline INTN* GetSharedPosition(VOID)
+{
+  return (INTN*)(FixedPcdGet32(PcdMipiFrameBufferAddress) + 
+                 (FixedPcdGet32(PcdMipiFrameBufferWidth) * 
+                  FixedPcdGet32(PcdMipiFrameBufferHeight) * 
+                  FixedPcdGet32(PcdMipiFrameBufferPixelBpp) / 8));
+}
+
 void FbConReset(void)
 {
-  // Reset position.
-  m_Position.x = 0;
-  m_Position.y = 0;
+  INTN *pShared = GetSharedPosition();
 
   // Calc max position.
   m_MaxPosition.x = gWidth / (FONT_WIDTH + 1);
   m_MaxPosition.y = (gHeight - 1) / FONT_HEIGHT;
+
+  // If shared cursor position exists from previous stage, continue seamlessly
+  if (pShared[1] > 0 && pShared[1] < (INTN)m_MaxPosition.y) {
+    m_Position.x = pShared[0];
+    m_Position.y = pShared[1];
+  } else {
+    m_Position.x = 0;
+    m_Position.y = 0;
+    pShared[0] = 0;
+    pShared[1] = 0;
+  }
 
   // Reset color.
   m_Color.Foreground = FB_BGRA8888_WHITE;
@@ -100,9 +136,7 @@ void FbConPutCharWithFactor(char c, int type, unsigned scale_factor)
   char *Pixels;
 
   if (!m_Initialized)
-    return;
-
-paint:
+    SerialPortInitialize();
 
   if ((unsigned char)c > 127)
     return;
@@ -137,6 +171,12 @@ paint:
 
   m_Position.x++;
 
+  {
+    INTN *pShared = GetSharedPosition();
+    pShared[0] = m_Position.x;
+    pShared[1] = m_Position.y;
+  }
+
   if (m_Position.x >= (int)(m_MaxPosition.x / scale_factor))
     goto newline;
 
@@ -145,22 +185,37 @@ paint:
   return;
 
 newline:
-  MicroSecondDelay( delay ); 
+  PetAndDisableWatchdog();
+  SafeDelayMs( 30 );
+
   m_Position.y += scale_factor;
   m_Position.x = 0;
+  {
+    INTN *pShared = GetSharedPosition();
+    pShared[0] = m_Position.x;
+    pShared[1] = m_Position.y;
+  }
   if (m_Position.y >= m_MaxPosition.y - scale_factor) {
-    FbConFlush();
+    // Screen is full! Pause 1.5 seconds so user/camera can comfortably see the full page
+    SafeDelayMs( 1500 );
+    m_Position.x = 0;
     m_Position.y = 0;
-
+    {
+      INTN *pShared = GetSharedPosition();
+      pShared[0] = 0;
+      pShared[1] = 0;
+    }
+    ResetFb();
+    FbConFlush();
     if (intstate)
       ArmEnableInterrupts();
-    goto paint;
+    return;
   }
   else {
     Pixels = (void *)FixedPcdGet32(PcdMipiFrameBufferAddress);
     Pixels += m_Position.y * ((gBpp / 8) * FONT_HEIGHT * gWidth);
     ZeroMem(Pixels, ((gBpp / 8) * FONT_HEIGHT * gWidth) * scale_factor);
-    FbConFlush();
+    WriteBackInvalidateDataCacheRange(Pixels, ((gBpp / 8) * FONT_HEIGHT * gWidth) * scale_factor);
     if (intstate)
       ArmEnableInterrupts();
   }
@@ -302,11 +357,45 @@ EFIAPI
 SerialPortWrite(IN UINT8 *Buffer, IN UINTN NumberOfBytes)
 {
   UINT8 *CONST Final          = &Buffer[NumberOfBytes];
-  UINTN        InterruptState = ArmGetInterruptState();
+  UINTN        InterruptState;
+  BOOLEAN      MajorMilestone = FALSE;
+
+  if (NumberOfBytes >= 3) {
+    if (Buffer[0] == '=' && Buffer[1] == '=' && Buffer[2] == '=') MajorMilestone = TRUE;
+    else if (NumberOfBytes >= 4 && Buffer[1] == '=' && Buffer[2] == '=' && Buffer[3] == '=') MajorMilestone = TRUE;
+    else if (NumberOfBytes >= 8 && Buffer[0] == 'D' && Buffer[1] == 'I' && Buffer[2] == 'S' && Buffer[3] == 'P' && Buffer[4] == 'A' && Buffer[5] == 'T' && Buffer[6] == 'C' && Buffer[7] == 'H') MajorMilestone = TRUE;
+    else if (NumberOfBytes >= 4 && Buffer[0] == 'P' && Buffer[1] == 'C' && Buffer[2] == 'D' && Buffer[3] == ':') MajorMilestone = TRUE;
+    else if (NumberOfBytes >= 8 && Buffer[0] == 'A' && Buffer[1] == 'P' && Buffer[2] == 'R' && Buffer[3] == 'I' && Buffer[4] == 'O' && Buffer[5] == 'R' && Buffer[6] == 'I' && Buffer[7] == ':') MajorMilestone = TRUE;
+    else if (NumberOfBytes >= 7 && Buffer[0] == 'C' && Buffer[1] == 'P' && Buffer[2] == 'U' && Buffer[3] == 'D' && Buffer[4] == 'X' && Buffer[5] == 'E' && Buffer[6] == ':') MajorMilestone = TRUE;
+    else if (NumberOfBytes >= 6 && Buffer[0] == 'G' && Buffer[1] == 'I' && Buffer[2] == 'C' && Buffer[3] == 'V' && Buffer[4] == '2' && Buffer[5] == ':') MajorMilestone = TRUE;
+  }
+
+  if (!m_Initialized)
+    SerialPortInitialize();
+
+  // Continuously pet APCS watchdog (0x0B017004) and keep disabled (0x0B017008)
+  PetAndDisableWatchdog();
+
+  InterruptState = ArmGetInterruptState();
   ArmDisableInterrupts();
 
+  INTN start_y = m_Position.y;
   while (Buffer < Final) {
     FbConPutCharWithFactor(*Buffer++, FBCON_COMMON_MSG, SCALE_FACTOR);
+  }
+
+  INTN end_y = m_Position.y;
+  if (start_y <= end_y) {
+    char *p = (void *)FixedPcdGet32(PcdMipiFrameBufferAddress);
+    p += start_y * ((gBpp / 8) * FONT_HEIGHT * gWidth);
+    UINTN flush_size = (end_y - start_y + SCALE_FACTOR) * ((gBpp / 8) * FONT_HEIGHT * gWidth);
+    WriteBackInvalidateDataCacheRange(p, flush_size);
+  } else {
+    FbConFlush();
+  }
+
+  if (MajorMilestone) {
+    SafeDelayMs(800);
   }
 
   if (InterruptState)
@@ -325,8 +414,19 @@ SerialPortWriteCritical(IN UINT8 *Buffer, IN UINTN NumberOfBytes)
   ArmDisableInterrupts();
   m_Color.Foreground = FB_BGRA8888_YELLOW;
 
+  INTN start_y = m_Position.y;
   while (Buffer < Final) {
     FbConPutCharWithFactor(*Buffer++, FBCON_COMMON_MSG, SCALE_FACTOR);
+  }
+
+  INTN end_y = m_Position.y;
+  if (start_y <= end_y) {
+    char *p = (void *)FixedPcdGet32(PcdMipiFrameBufferAddress);
+    p += start_y * ((gBpp / 8) * FONT_HEIGHT * gWidth);
+    UINTN flush_size = (end_y - start_y + SCALE_FACTOR) * ((gBpp / 8) * FONT_HEIGHT * gWidth);
+    WriteBackInvalidateDataCacheRange(p, flush_size);
+  } else {
+    FbConFlush();
   }
 
   m_Color.Foreground = CurrentForeground;

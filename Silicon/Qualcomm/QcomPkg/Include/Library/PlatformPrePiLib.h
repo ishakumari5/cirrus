@@ -2,5 +2,6 @@
 #define _PLATFORM_PREPI_LIB_H_
 
 VOID PlatformInitialize();
+VOID EarlyPaintCheckpoint(UINTN StartRow, UINTN NumRows, UINT32 Color);
 
 #endif /* _PLATFORM_UTILS_H_ */

@@ -58,8 +58,8 @@ VOID AddHob(PARM_MEMORY_REGION_DESCRIPTOR_EX Desc)
   BuildResourceDescriptorHob(
       Desc->ResourceType, Desc->ResourceAttribute, Desc->Address, Desc->Length);
 
-  if (Desc->ResourceType == EFI_RESOURCE_SYSTEM_MEMORY ||
-      Desc->MemoryType == EfiRuntimeServicesData)
+  if (Desc->ResourceType == EFI_RESOURCE_SYSTEM_MEMORY &&
+      Desc->MemoryType != EfiConventionalMemory)
   {
     BuildMemoryAllocationHob(Desc->Address, Desc->Length, Desc->MemoryType);
   }
@@ -95,25 +95,29 @@ MemoryPeim(IN EFI_PHYSICAL_ADDRESS UefiMemoryBase, IN UINT64 UefiMemorySize)
   UINTN MemoryBase = 0;
   UINTN MemorySize = 0;
   UINTN MemoryTotal = 0;
-  DeviceMemoryAddHob Mem = Mem4G;
-  UINT8 MemGB = 4;
+  DeviceMemoryAddHob Mem = Mem2G;
+  UINT8 MemGB = 2;
   fdt *Fdt;
 
   Fdt = GetFdt();
-  ASSERT(Fdt != NULL);
-
-  while (fdt_get_memory(Fdt, (int)Node, (uint64_t*)&MemoryBase, (uint64_t*)&MemorySize)) {
-    MemoryTotal += MemorySize;
-    DEBUG((
-      EFI_D_INFO,
-      "FDT Memory %-2d: 0x%016llx - 0x%016llx (0x%016llx)\n",
-      Node, MemoryBase, (MemoryBase + MemorySize), MemorySize
-    ));
-    Node++;
+  if (Fdt != NULL) {
+    while (fdt_get_memory(Fdt, (int)Node, (uint64_t*)&MemoryBase, (uint64_t*)&MemorySize)) {
+      MemoryTotal += MemorySize;
+      DEBUG((
+        EFI_D_INFO,
+        "FDT Memory %-2d: 0x%016llx - 0x%016llx (0x%016llx)\n",
+        Node, MemoryBase, (MemoryBase + MemorySize), MemorySize
+      ));
+      Node++;
+    }
+  } else {
+    DEBUG((EFI_D_WARN, "Fdt is NULL, continuing with platform memory map\n"));
   }
 
   // Memory   Min    Max   Config
-  SIZE_MB_IN (3072,  4608, 4);
+  SIZE_MB_IN (1024,  2560, 2);
+  SIZE_MB_IN (2560,  3584, 3);
+  SIZE_MB_IN (3584,  4608, 4);
   SIZE_MB_IN (5120,  6656, 6);
   SIZE_MB_IN (7168,  8704, 8);
   SIZE_MB_IN (9216, 10752, 10);
@@ -127,6 +131,8 @@ MemoryPeim(IN EFI_PHYSICAL_ADDRESS UefiMemoryBase, IN UINT64 UefiMemorySize)
     if (MemoryDescriptorEx->MemoryType == EfiConventionalMemory)
       MemoryTotal += MemoryDescriptorEx->Length;
     switch (MemoryDescriptorEx->HobOption) {
+    case Mem2G:
+    case Mem3G:
     case Mem4G:
     case Mem6G:
     case Mem8G:

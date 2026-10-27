@@ -30,6 +30,25 @@ _ModuleEntryPoint:
   mov x10, FixedPcdGet64 (PcdDeviceTreeStore)
   str x0, [x10] // oh my fdt
 
+  /* Checkpoint 3: PrePi Entry (Paint 40 rows YELLOW at row 80) */
+  movz  x7, #(2880 * 80) & 0xFFFF
+  movk  x7, #(0x90000000 + (2880 * 80)) >> 16, lsl #16
+  movz  x8, #0xFFFF
+  orr   x8, x8, x8, lsl #32
+  movz  x9, #(720 * 40 / 2)
+.Lpaint_yellow:
+  str   x8, [x7], #8
+  subs  x9, x9, #1
+  b.ne  .Lpaint_yellow
+
+  movz  x7, #(0x1000 + (2880 * 80)) & 0xFFFF
+  movk  x7, #(0x90000000 + 0x1000 + (2880 * 80)) >> 16, lsl #16
+  movz  x9, #(720 * 40 / 2)
+.Lpaint_yellow2:
+  str   x8, [x7], #8
+  subs  x9, x9, #1
+  b.ne  .Lpaint_yellow2
+
   mov x0, #0
   mov x1, #0
 
@@ -78,19 +97,16 @@ _SetupPrimaryCoreStack:
   ldr x0, _StackBase     /* Stack base arg0 */
   ldr x1, _StackSize     /* Stack size arg1 */
 
-  /* Zero Init stack */
+  /* Zero Init stack safely with 64-bit integer stores */
   add x2, x0, x1         /* End of Stack */
   mov x3, x0             /* Stack Base */
 
-  mov v4.d[0], xzr
-  mov v4.d[1], xzr
-  mov v5.16b, v4.16b
-  mov v6.16b, v4.16b
-  mov v7.16b, v4.16b
+  mov x4, xzr
+  mov x5, xzr
 
 _ClearStack:
-  /* Assumes StackBase is 128-bit aligned, StackSize is a multiple of 64B */
-  st4   {v4.16b, v5.16b, v6.16b, v7.16b}, [x3], #64  /* Fill every 64 bytes */
+  /* Assumes StackBase is 128-bit aligned, StackSize is a multiple of 16B */
+  stp   x4, x5, [x3], #16                        /* Fill every 16 bytes */
   cmp   x3, x2                                   /* Compare Size */
   b.lt  _ClearStack
 
@@ -102,6 +118,26 @@ _EnableCache:
   bl ASM_PFX(ArmEnableDataCache)
 
 _PrepareArguments:
+  /* Checkpoint 4: Primary Stack Ready & Caches Enabled (Paint 40 rows MAGENTA at row 120) */
+  movz  x7, #(2880 * 120) & 0xFFFF
+  movk  x7, #(0x90000000 + (2880 * 120)) >> 16, lsl #16
+  movz  x8, #0x00FF
+  movk  x8, #0x00FF, lsl #16
+  orr   x8, x8, x8, lsl #32
+  movz  x9, #(720 * 40 / 2)
+.Lpaint_magenta:
+  str   x8, [x7], #8
+  subs  x9, x9, #1
+  b.ne  .Lpaint_magenta
+
+  movz  x7, #(0x1000 + (2880 * 120)) & 0xFFFF
+  movk  x7, #(0x90000000 + 0x1000 + (2880 * 120)) >> 16, lsl #16
+  movz  x9, #(720 * 40 / 2)
+.Lpaint_magenta2:
+  str   x8, [x7], #8
+  subs  x9, x9, #1
+  b.ne  .Lpaint_magenta2
+
   /* x0 = _StackBase and x1 = _StackSize */
   ldr x0, _StackBase     /* Stack base arg0 */
   ldr x1, _StackSize     /* Stack size arg1 */

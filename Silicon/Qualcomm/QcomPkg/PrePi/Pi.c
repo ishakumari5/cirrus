@@ -93,8 +93,9 @@ PrePiMain(
   SetBootMode (BOOT_WITH_DEFAULT_SETTINGS);
 
   // Initialize Platform HOBs (CpuHob and FvHob)
-  DEBUG((EFI_D_INFO, "PlatformPeim In \n"));
+  DEBUG((EFI_D_ERROR, "PlatformPeim In \n"));
   Status = PlatformPeim();
+  DEBUG((EFI_D_ERROR, "PlatformPeim Out: %r\n", Status));
   ASSERT_EFI_ERROR (Status);
 
   // Now, the HOB List has been initialized, we can register performance information
@@ -102,15 +103,24 @@ PrePiMain(
 
   // SEC phase needs to run library constructors by hand.
   ProcessLibraryConstructorList();
+  DEBUG((EFI_D_ERROR, "ProcessLibraryConstructorList Out\n"));
+
+  // Checkpoint 6: MMU and HOBs ready, decompressing DXE FV (Orange indicator at rows 4-8)
+  EarlyPaintCheckpoint(4, 4, 0x00FF8000);
 
   // Assume the FV that contains the SEC (our code) also contains a compressed FV.
-  DEBUG((EFI_D_INFO, "DecompressFirstFv In \n"));
+  DEBUG((EFI_D_ERROR, "DecompressFirstFv In \n"));
   Status = DecompressFirstFv();
+  DEBUG((EFI_D_ERROR, "DecompressFirstFv Out: %r\n", Status));
   ASSERT_EFI_ERROR (Status);
 
+  // Checkpoint 7: DXE Decompressed, jumping to DXE Core (White indicator at rows 8-12)
+  EarlyPaintCheckpoint(8, 4, 0x00FFFFFF);
+
   // Load the DXE Core and transfer control to it
-  DEBUG((EFI_D_INFO, "LoadDxeCoreFromFv In \n"));
+  DEBUG((EFI_D_ERROR, "LoadDxeCoreFromFv In \n"));
   Status = LoadDxeCoreFromFv(NULL, 0);
+  DEBUG((EFI_D_ERROR, "LoadDxeCoreFromFv Out: %r\n", Status));
   ASSERT_EFI_ERROR (Status);
 }
 
