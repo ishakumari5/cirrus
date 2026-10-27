@@ -21,3 +21,4 @@ emmc_appsboot.mbn
 last_kmsg
 logcat.txt
 ramoops.log
+*.jpg
