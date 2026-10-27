@@ -25,6 +25,7 @@
   EmbeddedPkg/EmbeddedPkg.dec
   Silicon/Qualcomm/QcomPkg/QcomPkg.dec
   Silicon/Qualcomm/msm8953/msm8953.dec
+  GPLDrivers/Library/SimpleInit/SimpleInit.dec
 
 [LibraryClasses]
   ArmLib
@@ -36,9 +37,12 @@
   MemoryAllocationLib
   SerialPortLib
   MemoryMapHelperLib
+  FdtLib
 
 [FixedPcd]
   gArmTokenSpaceGuid.PcdFvSize
+  gQcomTokenSpaceGuid.PcdMipiFrameBufferAddress
+  gSimpleInitTokenSpaceGuid.PcdDeviceTreeStore
 
 [Pcd]
   gArmTokenSpaceGuid.PcdFvBaseAddress

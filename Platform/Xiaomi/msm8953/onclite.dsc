@@ -17,8 +17,11 @@
   GCC:*_*_AARCH64_CC_FLAGS = -DENABLE_SIMPLE_INIT
 
 [PcdsFixedAtBuild.common]
+  # Disable strict memory and image protections to avoid MMU page faults under lk2nd chainload
   gEfiMdeModulePkgTokenSpaceGuid.PcdImageProtectionPolicy|0x00000000
   gEfiMdeModulePkgTokenSpaceGuid.PcdDxeNxMemoryProtectionPolicy|0x00000000
+  gEfiMdeModulePkgTokenSpaceGuid.PcdNullPointerDetectionPropertyMask|0x00000000
+  gEfiMdeModulePkgTokenSpaceGuid.PcdSetNxForStack|FALSE
 
   gQcomTokenSpaceGuid.PcdMipiFrameBufferWidth|720
   gQcomTokenSpaceGuid.PcdMipiFrameBufferHeight|1520

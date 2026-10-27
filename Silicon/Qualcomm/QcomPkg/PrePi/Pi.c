@@ -8,6 +8,7 @@
 #include <Library/PrePiHobListPointerLib.h>
 #include <Library/CacheMaintenanceLib.h>
 #include <Library/PlatformPrePiLib.h>
+#include <Library/ColorTrap.h>
 
 #include <Ppi/GuidedSectionExtraction.h>
 
@@ -131,6 +132,7 @@ PrePiMain(
 
   // Checkpoint 7: DXE Decompressed, jumping to DXE Core (White indicator at rows 8-12)
   EarlyPaintCheckpoint(8, 4, 0x00FFFFFF);
+  DEBUG_COLOR_TRAP(COLOR_CYAN);
 
   // Load the DXE Core and transfer control to it
   DEBUG((EFI_D_ERROR, "LoadDxeCoreFromFv In \n"));
@@ -145,8 +147,12 @@ CEntryPoint(
   IN UINTN StackSize
   )
 {
+  DEBUG_COLOR_TRAP(COLOR_YELLOW);
+
   // Do platform specific initialization here
   PlatformInitialize();
+
+  DEBUG_COLOR_TRAP(COLOR_MAGENTA);
 
   // Goto primary Main.
   PrePiMain(StackBase, StackSize);

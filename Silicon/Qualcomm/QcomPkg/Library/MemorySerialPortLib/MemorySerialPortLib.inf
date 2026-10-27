@@ -1,0 +1,35 @@
+## @file
+#
+# Memory Serial Port Library (RAMoops-style in-memory debug log).
+#
+# Writes EDK2 debug logs directly to a fixed, safe RAM address (0x9FFF7000).
+# Allows uncut log extraction via Fastboot memory dump after crashes with
+# zero rendering latency and no reliance on slow framebuffer text.
+#
+# Copyright (c) 2026. All rights reserved.
+#
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+#
+##
+
+[Defines]
+  INF_VERSION    = 0x00010005
+  FILE_GUID      = 7789A531-9053-4ED2-8953-MEMLOG000001
+  BASE_NAME      = MemorySerialPortLib
+  MODULE_TYPE    = BASE
+  VERSION_STRING = 1.0
+  LIBRARY_CLASS  = SerialPortLib
+
+[Sources.common]
+  MemorySerialPortLib.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  ArmPkg/ArmPkg.dec
+  Silicon/Qualcomm/QcomPkg/QcomPkg.dec
+
+[LibraryClasses]
+  ArmLib
+  PcdLib
+  IoLib
+  CacheMaintenanceLib

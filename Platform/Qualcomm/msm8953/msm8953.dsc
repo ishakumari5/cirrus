@@ -23,9 +23,11 @@
 !include Silicon/Qualcomm/QcomPkg/QcomCommonDsc.inc
 
 [PcdsFixedAtBuild.common]
-  # Disable DXE Memory Protection to avoid MMU page table conflict with lk2nd
+  # Disable strict memory and image protections to avoid MMU page faults under lk2nd chainload
   gEfiMdeModulePkgTokenSpaceGuid.PcdImageProtectionPolicy|0x00000000
   gEfiMdeModulePkgTokenSpaceGuid.PcdDxeNxMemoryProtectionPolicy|0x00000000
+  gEfiMdeModulePkgTokenSpaceGuid.PcdNullPointerDetectionPropertyMask|0x00000000
+  gEfiMdeModulePkgTokenSpaceGuid.PcdSetNxForStack|FALSE
 
   gArmTokenSpaceGuid.PcdSystemMemoryBase|0x80000000         # Starting address (MSM8953 true DDR base)
   gArmTokenSpaceGuid.PcdSystemMemorySize|0x7E000000         # Fit 2GB devices safely
@@ -62,6 +64,12 @@
 [LibraryClasses.common]
   # Ported from SurfaceDuoPkg
   AslUpdateLib|Silicon/Qualcomm/QcomPkg/Library/DxeAslUpdateLib/DxeAslUpdateLib.inf
+
+  # Memory Log (RAMoops style)
+  MemorySerialPortLib|Silicon/Qualcomm/QcomPkg/Library/MemorySerialPortLib/MemorySerialPortLib.inf
+!if $(USE_MEMLOG) == 1
+  SerialPortLib|Silicon/Qualcomm/QcomPkg/Library/MemorySerialPortLib/MemorySerialPortLib.inf
+!endif
 
   PlatformMemoryMapLib|Silicon/Qualcomm/msm8953/Library/PlatformMemoryMapLib/PlatformMemoryMapLib.inf
   PlatformPeiLib|Silicon/Qualcomm/msm8953/Library/PlatformPeiLib/PlatformPeiLib.inf

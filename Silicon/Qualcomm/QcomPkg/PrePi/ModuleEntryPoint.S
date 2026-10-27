@@ -30,6 +30,18 @@ _ModuleEntryPoint:
   mov x10, FixedPcdGet64 (PcdDeviceTreeStore)
   str x0, [x10] // oh my fdt
 
+  /* Neutralize APCS hardware watchdog immediately upon entering PrePi */
+  movz  x7, #0x7000
+  movk  x7, #0x0B01, lsl #16
+  movz  x8, #0xFFFF
+  movk  x8, #0xFFFF, lsl #16
+  str   w8, [x7, #0x10]  /* WDT0_BARK_TIME = 0xFFFFFFFF (~36 hours) */
+  str   w8, [x7, #0x14]  /* WDT0_BITE_TIME = 0xFFFFFFFF */
+  str   wzr, [x7, #0x08] /* WDT0_EN = 0 (DISABLE watchdog) */
+  movz  x8, #1
+  str   w8, [x7, #0x04]  /* WDT0_RST = 1 (PET) */
+  str   w8, [x7]         /* Pet base offset 0 */
+
   /* Checkpoint 3: PrePi Entry (Paint 40 rows YELLOW at row 80) */
   movz  x7, #(2880 * 80) & 0xFFFF
   movk  x7, #(0x90000000 + (2880 * 80)) >> 16, lsl #16

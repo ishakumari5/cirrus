@@ -124,17 +124,27 @@ VOID SetWatchdogState(BOOLEAN Enable)
   MmioWrite32(APCS_WDOG_CTL_REG, Enable ? 1 : 0);
 }
 
-VOID PlatformInitialize()
+VOID CeaseWatchdog(VOID)
 {
-  // 1. Pet and disable APCS hardware watchdog (0x0B017000)
-  // Set Bark and Bite timeouts to maximum (~36 hours)
+  // 1. Set Bark and Bite timeouts to maximum (~36 hours)
   MmioWrite32(APCS_WDOG_BARK_VAL_REG, 0xFFFFFFFF);
   MmioWrite32(APCS_WDOG_BITE_VAL_REG, 0xFFFFFFFF);
-  // Disable WDT0_EN (0x0B017008)
+  // 2. Disable WDT0_EN (0x0B017008)
   SetWatchdogState(FALSE);
-  // Pet WDT0_RST (0x0B017004)
+  // 3. Pet WDT0_RST (0x0B017004) and base trigger
   MmioWrite32(APCS_WDOG_RST_REG, 1);
   MmioWrite32(APCS_WDOG_BASE, 1);
+}
+
+VOID PetWatchdog(VOID)
+{
+  MmioWrite32(APCS_WDOG_RST_REG, 1);
+}
+
+VOID PlatformInitialize()
+{
+  // 1. Cease APCS hardware watchdog immediately
+  CeaseWatchdog();
 
   // 2. Reconfigure MDP5 pipe to 32bpp XRGB8888 at 0x90000000 with 720x1520 stride 2880
   ConfigureDisplayHardware();

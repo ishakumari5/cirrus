@@ -24,6 +24,47 @@ UINTN gHeight = FixedPcdGet32(PcdMipiFrameBufferHeight);
 UINTN gBpp    = FixedPcdGet32(PcdMipiFrameBufferPixelBpp);
 UINTN delay = FixedPcdGet32(PcdMipiFrameBufferDelay);
 
+#define MEMORY_LOG_MAGIC     0x52414D4CUL  /* "RAML" */
+#define MEMORY_LOG_BASE      0x9FFF7000ULL
+#define MEMORY_LOG_SIZE      0x00008000ULL /* 32 KiB */
+
+#pragma pack(push, 1)
+typedef struct {
+  UINT32 Magic;
+  UINT32 HeaderSize;
+  UINT32 BufferSize;
+  UINT32 WriteOffset;
+  UINT32 WrapCount;
+  UINT32 Reserved[3];
+  CHAR8  LogData[];
+} MEMORY_LOG_HEADER;
+#pragma pack(pop)
+
+STATIC VOID LogToMemory(IN CONST UINT8 *Buffer, IN UINTN NumberOfBytes)
+{
+  MEMORY_LOG_HEADER *Header = (MEMORY_LOG_HEADER *)(UINTN)MEMORY_LOG_BASE;
+  if (Header->Magic != MEMORY_LOG_MAGIC ||
+      Header->BufferSize != (UINT32)(MEMORY_LOG_SIZE - sizeof(MEMORY_LOG_HEADER))) {
+    Header->Magic       = MEMORY_LOG_MAGIC;
+    Header->HeaderSize  = sizeof(MEMORY_LOG_HEADER);
+    Header->BufferSize  = (UINT32)(MEMORY_LOG_SIZE - sizeof(MEMORY_LOG_HEADER));
+    Header->WriteOffset = 0;
+    Header->WrapCount   = 0;
+  }
+  UINT32 Capacity = Header->BufferSize;
+  if (Capacity == 0) return;
+  UINT32 Offset = Header->WriteOffset;
+  for (UINTN i = 0; i < NumberOfBytes; i++) {
+    Header->LogData[Offset++] = (CHAR8)Buffer[i];
+    if (Offset >= Capacity) {
+      Offset = 0;
+      Header->WrapCount++;
+    }
+  }
+  Header->WriteOffset = Offset;
+  WriteBackInvalidateDataCacheRange((VOID *)Header, sizeof(MEMORY_LOG_HEADER) + Offset);
+}
+
 STATIC inline VOID PetAndDisableWatchdog(VOID)
 {
   *(volatile UINT32 *)(UINTN)0x0B017010 = 0xFFFFFFFF; // Max bark time
@@ -35,11 +76,9 @@ STATIC inline VOID PetAndDisableWatchdog(VOID)
 
 STATIC VOID SafeDelayMs(UINTN Milliseconds)
 {
-  UINTN Count = Milliseconds / 50;
-  if (Count == 0) Count = 1;
-  for (UINTN i = 0; i < Count; i++) {
-    PetAndDisableWatchdog();
-    MicroSecondDelay(50000);
+  PetAndDisableWatchdog();
+  if (Milliseconds > 0) {
+    MicroSecondDelay(Milliseconds * 1000);
   }
 }
 
@@ -186,7 +225,6 @@ void FbConPutCharWithFactor(char c, int type, unsigned scale_factor)
 
 newline:
   PetAndDisableWatchdog();
-  SafeDelayMs( 30 );
 
   m_Position.y += scale_factor;
   m_Position.x = 0;
@@ -196,8 +234,6 @@ newline:
     pShared[1] = m_Position.y;
   }
   if (m_Position.y >= m_MaxPosition.y - scale_factor) {
-    // Screen is full! Pause 1.5 seconds so user/camera can comfortably see the full page
-    SafeDelayMs( 1500 );
     m_Position.x = 0;
     m_Position.y = 0;
     {
@@ -375,6 +411,9 @@ SerialPortWrite(IN UINT8 *Buffer, IN UINTN NumberOfBytes)
 
   // Continuously pet APCS watchdog (0x0B017004) and keep disabled (0x0B017008)
   PetAndDisableWatchdog();
+
+  // Always mirror logs to RAMoops buffer at 0x9FFF7000
+  LogToMemory(Buffer, NumberOfBytes);
 
   InterruptState = ArmGetInterruptState();
   ArmDisableInterrupts();

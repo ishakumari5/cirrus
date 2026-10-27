@@ -73,3 +73,4 @@
   gQcomTokenSpaceGuid.PcdUefiMemPoolSize
   gSimpleInitTokenSpaceGuid.PcdDeviceTreeStore
   gQcomTokenSpaceGuid.PcdLinuxUtilsCheckHallOnly
+  gQcomTokenSpaceGuid.PcdMipiFrameBufferAddress

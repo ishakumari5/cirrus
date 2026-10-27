@@ -87,6 +87,12 @@
   gEfiMdePkgTokenSpaceGuid.PcdReportStatusCodePropertyMask|0x06
   gEfiMdeModulePkgTokenSpaceGuid.PcdResetOnMemoryTypeInformationChange|FALSE
 
+  # Disable strict memory and image protections by default to prevent MMU page faults
+  gEfiMdeModulePkgTokenSpaceGuid.PcdImageProtectionPolicy|0x00000000
+  gEfiMdeModulePkgTokenSpaceGuid.PcdDxeNxMemoryProtectionPolicy|0x00000000
+  gEfiMdeModulePkgTokenSpaceGuid.PcdNullPointerDetectionPropertyMask|0x00000000
+  gEfiMdeModulePkgTokenSpaceGuid.PcdSetNxForStack|FALSE
+
   #
   # Make VariableRuntimeDxe work at emulated non-volatile variable mode.
   #

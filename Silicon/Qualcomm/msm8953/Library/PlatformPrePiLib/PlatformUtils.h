@@ -2,6 +2,7 @@
 #define _PLATFORM_UTILS_H_
 
 #include <Library/PcdLib.h>
+#include <Library/ColorTrap.h>
 
 #define APCS_WDOG_BASE         0x0B017000
 #define APCS_WDOG_RST_REG      0x0B017004
@@ -11,6 +12,8 @@
 #define APCS_WDOG_BITE_VAL_REG 0x0B017014
 
 VOID SetWatchdogState(BOOLEAN Enable);
-VOID PlatformInitialize();
+VOID CeaseWatchdog(VOID);
+VOID PetWatchdog(VOID);
+VOID PlatformInitialize(VOID);
 
 #endif /* _PLATFORM_UTILS_H_ */
