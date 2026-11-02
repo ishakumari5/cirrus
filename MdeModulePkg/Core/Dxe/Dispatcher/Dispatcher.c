@@ -437,6 +437,8 @@ CoreDispatcher (
     // Drain the Scheduled Queue
     //
     while (!IsListEmpty (&mScheduledQueue)) {
+      *(volatile UINT32 *)(UINTN)0x0B017008 = 0; // WDT0_EN = 0 (DISABLE)
+      *(volatile UINT32 *)(UINTN)0x0B017004 = 1; // WDT0_RST = 1 (PET)
       DriverEntry = CR (
                       mScheduledQueue.ForwardLink,
                       EFI_CORE_DRIVER_ENTRY,
@@ -516,6 +518,8 @@ CoreDispatcher (
         ASSERT (DriverEntry->ImageHandle != NULL);
 
         DEBUG ((DEBUG_ERROR, "DISPATCH: Start %g\n", &DriverEntry->FileName));
+        *(volatile UINT32 *)(UINTN)0x0B017008 = 0; // WDT0_EN = 0 (DISABLE)
+        *(volatile UINT32 *)(UINTN)0x0B017004 = 1; // WDT0_RST = 1 (PET)
         Status = CoreStartImage (DriverEntry->ImageHandle, NULL, NULL);
         DEBUG ((DEBUG_ERROR, "DISPATCH: Done %g: %r\n", &DriverEntry->FileName, Status));
 

@@ -436,7 +436,10 @@ FvCheck (
 
   FfsHeader    = (EFI_FFS_FILE_HEADER *)ALIGN_POINTER (FfsHeader, 8);
   TopFvAddress = FvDevice->EndOfCachedFv;
+  DEBUG ((DEBUG_ERROR, "DXE: FvCheck In (CachedFv=%p, Top=%p)\n", FvDevice->CachedFv, TopFvAddress));
   while (((UINTN)FfsHeader >= (UINTN)FvDevice->CachedFv) && ((UINTN)FfsHeader <= (UINTN)((UINTN)TopFvAddress - sizeof (EFI_FFS_FILE_HEADER)))) {
+    *(volatile UINT32 *)(UINTN)0x0B017008 = 0; // WDT0_EN = 0 (DISABLE)
+    *(volatile UINT32 *)(UINTN)0x0B017004 = 1; // WDT0_RST = 1 (PET)
     if (FileCached) {
       CoreFreePool (CacheFfsHeader);
       FileCached = FALSE;
@@ -552,6 +555,7 @@ FvCheck (
   }
 
 Done:
+  DEBUG ((DEBUG_ERROR, "DXE: FvCheck Out: %r\n", Status));
   if (EFI_ERROR (Status)) {
     if (FileCached) {
       CoreFreePool (CacheFfsHeader);
@@ -672,6 +676,7 @@ NotifyFwVolBlock (
       //
       FvDevice->AuthenticationStatus = GetFvbAuthenticationStatus (Fvb);
 
+      DEBUG ((DEBUG_ERROR, "DXE: NotifyFwVolBlock calling FvCheck on handle %p...\n", Handle));
       if (!EFI_ERROR (FvCheck (FvDevice))) {
         //
         // Install an New FV protocol on the existing handle
@@ -713,6 +718,7 @@ FwVolDriverInit (
   IN EFI_SYSTEM_TABLE  *SystemTable
   )
 {
+  DEBUG ((DEBUG_ERROR, "DXE: FwVolDriverInit In\n"));
   gEfiFwVolBlockEvent = EfiCreateProtocolNotifyEvent (
                           &gEfiFirmwareVolumeBlockProtocolGuid,
                           TPL_CALLBACK,

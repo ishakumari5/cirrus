@@ -222,6 +222,8 @@ GLOBAL_REMOVE_IF_UNREFERENCED EFI_LOAD_FIXED_ADDRESS_CONFIGURATION_TABLE  gLoadM
 //
 
 STATIC VOID FbFillScreen(UINT32 Color) {
+    *(volatile UINT32 *)(UINTN)0x0B017008 = 0; // Disable watchdog: WDT0_EN = 0
+    *(volatile UINT32 *)(UINTN)0x0B017004 = 1; // Pet watchdog: WDT0_RST = 1
     volatile UINT32 *Fb = (volatile UINT32 *)(UINTN)0x90000000; // Adjust address if onc FB is different
     for (UINTN i = 0; i < (720 * 1520); i++) { Fb[i] = Color; }
     WriteBackDataCacheRange((VOID *)(UINTN)0x90000000, 720 * 1520 * 4);
@@ -314,6 +316,7 @@ DxeMain (
   // Call constructor for all libraries
   //
   DEBUG ((DEBUG_ERROR, "DXE: Running Library Constructors...\n"));
+  FbFillScreen(0x00FFFF00); // YELLOW: Running Library Constructors
   ProcessLibraryConstructorList (gDxeCoreImageHandle, gDxeCoreST);
   DEBUG ((DEBUG_ERROR, "DXE: Library Constructors Done\n"));
   FbFillScreen(0x0000FF00); // GREEN right after DXE: Library Constructors Done
