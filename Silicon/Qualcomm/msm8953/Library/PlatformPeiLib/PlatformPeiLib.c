@@ -316,6 +316,18 @@ LockCriticalPlatformRegions(VOID)
 {
   DEBUG((EFI_D_INFO, "[PlatformPei] LockCriticalPlatformRegions In\n"));
   PetWatchdog();
+
+  // Protect lk2nd ramoops/pstore region (0xBFE80000 - 0xBFF00000, 512 KiB)
+  BuildResourceDescriptorHob(
+    EFI_RESOURCE_MEMORY_RESERVED,
+    EFI_RESOURCE_ATTRIBUTE_WRITE_BACK_CACHEABLE,
+    0xBFE80000,
+    0x00080000
+  );
+  BuildMemoryAllocationHob(0xBFE80000, 0x00080000, EfiReservedMemoryType);
+
+  DEBUG((EFI_D_INFO, "[PlatformPei] lk2nd ramoops reserved at 0xBFE80000 (512 KB)\n"));
+  PetWatchdog();
 }
 
 EFI_STATUS

@@ -33,10 +33,8 @@ static ARM_MEMORY_REGION_DESCRIPTOR_EX gDeviceMemoryDescriptorEx[] = {
     /* DXE Heap (480MB from 0xA0000000 to 0xBE000000) - MUST be executable (WRITE_BACK) for DxeCore */
     {"DXE Heap",          0xA0000000, 0x1E000000, AddMem, SYS_MEM, SYS_MEM_CAP, Conv,   WRITE_BACK},
 
-    /* Upper Bank 1 memory: Free RAM up to 0xF2000000 */
-    {"RAM Partition 1A",  0xBE000000, 0x01EC0000, AddMem, SYS_MEM, SYS_MEM_CAP, Conv,   WRITE_BACK_XN},
-    {"lk2nd Ramoops",     0xBFEC0000, 0x00040000, AddMem, MEM_RES, SYS_MEM_CAP, Reserv, WRITE_BACK_XN},
-    {"RAM Partition 1B",  0xBFF00000, 0x32100000, AddMem, SYS_MEM, SYS_MEM_CAP, Conv,   WRITE_BACK_XN},
+    /* Upper Bank 1 memory: Free RAM up to 0xF2000000 (832MB, 2MB-aligned) */
+    {"RAM Partition 1A",  0xBE000000, 0x34000000, AddMem, SYS_MEM, SYS_MEM_CAP, Conv,   WRITE_BACK_XN},
     /* Protect TrustZone Secure Region, QSEECOM, and ADSP shared memory */
     {"TZ & Sec Subsys",   0xF2000000, 0x0E000000, AddMem, MEM_RES, SYS_MEM_CAP, Reserv, UNCACHED_UNBUFFERED_XN},
 

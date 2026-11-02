@@ -83,13 +83,22 @@ _ModuleEntryPoint:
   isb
 
 _SetupExceptionVector:
-  adr x0, PrePiVectorTable
+  ldr x0, =FixedPcdGet64(PcdCpuVectorBaseAddress)
   bl ArmWriteVBar
 
   mrs     x4, mpidr_el1
   and     x4, x4, #0xFFFF
   lsr     x4, x4, #8
   cbnz    x4, SecondaryCpuEntry
+
+  ldr x1, dead
+  add x2, x0, #0x800
+  mov x3, x0
+
+_FillVectors:
+  stp     x1, x1, [x3], #16 /* Fill every 16 byte */
+  cmp     x3, x2
+  b.lt    _FillVectors
 
 _DonNotTrap_VFP_SIMD:
   mrs x0, CPACR_EL1
