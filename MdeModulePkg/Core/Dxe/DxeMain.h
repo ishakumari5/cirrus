@@ -2802,4 +2802,53 @@ MergeMemoryMap (
   IN UINTN                      DescriptorSize
   );
 
+/**
+  Diagnostic sleep helper that delays for Seconds, petting the MSM8953 hardware
+  watchdog in a continuous loop and printing progress to console every second.
+**/
+STATIC
+inline
+VOID
+CoreSleepAndPet (
+  IN UINT32       Seconds,
+  IN CONST CHAR8  *StepName
+  )
+{
+  *(volatile UINT32 *)(UINTN)0x0B017008 = 0; // WDT0_EN = 0 (DISABLE)
+  *(volatile UINT32 *)(UINTN)0x0B017004 = 1; // WDT0_RST = 1 (PET)
+
+#if defined(__aarch64__)
+  UINT64 TicksPerSec = 0;
+  __asm__ volatile ("mrs %0, cntfrq_el0" : "=r" (TicksPerSec));
+  if (TicksPerSec == 0) {
+    TicksPerSec = 19200000ULL;
+  }
+  UINT64 TotalTicks = TicksPerSec * (UINT64)Seconds;
+  UINT64 StartTicks = 0;
+  __asm__ volatile ("mrs %0, cntpct_el0" : "=r" (StartTicks));
+
+  DEBUG ((DEBUG_ERROR, "\n[SLEEP 10s] >>> Entering sleep: %a <<<\n", StepName));
+
+  UINT64 CurrTicks = StartTicks;
+  UINT32 ElapsedSec = 0;
+  while ((CurrTicks - StartTicks) < TotalTicks) {
+    *(volatile UINT32 *)(UINTN)0x0B017008 = 0;
+    *(volatile UINT32 *)(UINTN)0x0B017004 = 1;
+
+    __asm__ volatile ("mrs %0, cntpct_el0" : "=r" (CurrTicks));
+    UINT32 NowSec = (UINT32)((CurrTicks - StartTicks) / TicksPerSec);
+    if (NowSec > ElapsedSec) {
+      ElapsedSec = NowSec;
+      DEBUG ((DEBUG_ERROR, "[SLEEP 10s] ... %u/%u s (%a) ...\n", ElapsedSec, Seconds, StepName));
+    }
+  }
+
+  *(volatile UINT32 *)(UINTN)0x0B017008 = 0;
+  *(volatile UINT32 *)(UINTN)0x0B017004 = 1;
+  DEBUG ((DEBUG_ERROR, "[SLEEP 10s] <<< Woke up after %u s! Resuming: %a >>>\n\n", Seconds, StepName));
+#else
+  DEBUG ((DEBUG_ERROR, "[SLEEP 10s] (Non-AArch64): %a\n", StepName));
+#endif
+}
+
 #endif

@@ -284,9 +284,11 @@ DxeMain (
   // Initialize Memory Services
   //
   CoreInitializeMemoryServices (&HobStart, &MemoryBaseAddress, &MemoryLength);
+  CoreSleepAndPet (10, "Step D1: Memory Services Initialized");
   FbFillScreen(0x00FF0000); // RED right after CoreInitializeMemoryServices
 
   MemoryProfileInit (HobStart);
+  CoreSleepAndPet (10, "Step D2: Allocating System & Runtime Tables");
 
   //
   // Allocate the EFI System Table and EFI Runtime Service Table from EfiRuntimeServicesData
@@ -303,12 +305,14 @@ DxeMain (
   //
   // Start the Image Services.
   //
+  CoreSleepAndPet (10, "Step D3: Calling CoreInitializeImageServices");
   Status = CoreInitializeImageServices (HobStart);
   ASSERT_EFI_ERROR (Status);
 
   //
   // Initialize the Global Coherency Domain Services
   //
+  CoreSleepAndPet (10, "Step D4: Calling CoreInitializeGcdServices");
   Status = CoreInitializeGcdServices (&HobStart, MemoryBaseAddress, MemoryLength);
   ASSERT_EFI_ERROR (Status);
 
@@ -317,9 +321,11 @@ DxeMain (
   //
   DEBUG ((DEBUG_ERROR, "DXE: Running Library Constructors...\n"));
   FbFillScreen(0x00FFFF00); // YELLOW: Running Library Constructors
+  CoreSleepAndPet (10, "Step D5: Calling ProcessLibraryConstructorList");
   ProcessLibraryConstructorList (gDxeCoreImageHandle, gDxeCoreST);
   DEBUG ((DEBUG_ERROR, "DXE: Library Constructors Done\n"));
   FbFillScreen(0x0000FF00); // GREEN right after DXE: Library Constructors Done
+  CoreSleepAndPet (10, "Step D6: Library Constructors Done");
   PERF_CROSSMODULE_END ("PEI");
   PERF_CROSSMODULE_BEGIN ("DXE");
   DEBUG ((DEBUG_ERROR, "DXE: CrossModule Perf Done\n"));
@@ -533,11 +539,13 @@ DxeMain (
   // Produce Firmware Volume Protocols, one for each FV in the HOB list.
   //
   DEBUG ((DEBUG_ERROR, "DXE: Calling FwVolBlockDriverInit...\n"));
+  CoreSleepAndPet (10, "Step D7: Calling FwVolBlockDriverInit");
   Status = FwVolBlockDriverInit (gDxeCoreImageHandle, gDxeCoreST);
   ASSERT_EFI_ERROR (Status);
   DEBUG ((DEBUG_ERROR, "DXE: FwVolBlockDriverInit returned %r\n", Status));
 
   DEBUG ((DEBUG_ERROR, "DXE: Calling FwVolDriverInit...\n"));
+  CoreSleepAndPet (10, "Step D8: Calling FwVolDriverInit");
 #if defined(__aarch64__)
   {
     UINT64 SctlrVal = 0;
@@ -559,6 +567,7 @@ DxeMain (
   //
   // Produce the Section Extraction Protocol
   //
+  CoreSleepAndPet (10, "Step D9: Calling InitializeSectionExtraction");
   Status = InitializeSectionExtraction (gDxeCoreImageHandle, gDxeCoreST);
   ASSERT_EFI_ERROR (Status);
   DEBUG ((DEBUG_ERROR, "DXE: Section Extraction Initialized\n"));
@@ -567,6 +576,7 @@ DxeMain (
   // Initialize the DXE Dispatcher
   //
   DEBUG ((DEBUG_ERROR, "DXE: CoreInitializeDispatcher In\n"));
+  CoreSleepAndPet (10, "Step D10: Calling CoreInitializeDispatcher");
   CoreInitializeDispatcher ();
   DEBUG ((DEBUG_ERROR, "DXE: CoreInitializeDispatcher Out\n"));
 
@@ -574,6 +584,7 @@ DxeMain (
   // Invoke the DXE Dispatcher
   //
   DEBUG ((DEBUG_ERROR, "\n=== DXE: INVOKING DRIVER DISPATCHER ===\n"));
+  CoreSleepAndPet (10, "Step D11: Calling CoreDispatcher");
   FbFillScreen(0x000000FF); // BLUE right before CoreDispatcher
   CoreDispatcher ();
 
