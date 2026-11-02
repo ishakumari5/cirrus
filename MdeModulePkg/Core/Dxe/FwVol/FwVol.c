@@ -184,6 +184,7 @@ GetFwVolHeader (
   UINTN                       Offset;
   UINT8                       *Buffer;
 
+  DEBUG ((DEBUG_ERROR, "DXE: GetFwVolHeader In (Fvb=%p)\n", Fvb));
   //
   // Read the standard FV header
   //
@@ -191,6 +192,7 @@ GetFwVolHeader (
   Offset    = 0;
   FvhLength = sizeof (EFI_FIRMWARE_VOLUME_HEADER);
   Status    = ReadFvbData (Fvb, &StartLba, &Offset, FvhLength, (UINT8 *)&TempFvh);
+  DEBUG ((DEBUG_ERROR, "DXE: GetFwVolHeader ReadFvbData Status=%r, Sig=0x%08x, Len=%u\n", Status, TempFvh.Signature, TempFvh.HeaderLength));
   if (EFI_ERROR (Status)) {
     return Status;
   }
@@ -199,6 +201,7 @@ GetFwVolHeader (
   // Validate FV Header signature, if not as expected, continue.
   //
   if (TempFvh.Signature != EFI_FVH_SIGNATURE) {
+    DEBUG ((DEBUG_ERROR, "DXE: GetFwVolHeader Invalid Signature 0x%08x != 0x%08x\n", TempFvh.Signature, EFI_FVH_SIGNATURE));
     return EFI_INVALID_PARAMETER;
   }
 
@@ -209,6 +212,7 @@ GetFwVolHeader (
   if ((!CompareGuid (&TempFvh.FileSystemGuid, &gEfiFirmwareFileSystem2Guid)) &&
       (!CompareGuid (&TempFvh.FileSystemGuid, &gEfiFirmwareFileSystem3Guid)))
   {
+    DEBUG ((DEBUG_ERROR, "DXE: GetFwVolHeader Unknown FileSystemGuid %g\n", &TempFvh.FileSystemGuid));
     return EFI_INVALID_PARAMETER;
   }
 
@@ -216,6 +220,7 @@ GetFwVolHeader (
   // Allocate a buffer for the caller
   //
   *FwVolHeader = AllocatePool (TempFvh.HeaderLength);
+  DEBUG ((DEBUG_ERROR, "DXE: GetFwVolHeader AllocatePool(%u) = %p\n", TempFvh.HeaderLength, *FwVolHeader));
   if (*FwVolHeader == NULL) {
     return EFI_OUT_OF_RESOURCES;
   }
@@ -231,6 +236,7 @@ GetFwVolHeader (
   FvhLength = TempFvh.HeaderLength - sizeof (EFI_FIRMWARE_VOLUME_HEADER);
   Buffer    = (UINT8 *)*FwVolHeader + sizeof (EFI_FIRMWARE_VOLUME_HEADER);
   Status    = ReadFvbData (Fvb, &StartLba, &Offset, FvhLength, Buffer);
+  DEBUG ((DEBUG_ERROR, "DXE: GetFwVolHeader Read rest of header Status=%r\n", Status));
   if (EFI_ERROR (Status)) {
     //
     // Read failed so free buffer
@@ -339,15 +345,18 @@ FvCheck (
 
   Status = Fvb->GetAttributes (Fvb, &FvbAttributes);
   if (EFI_ERROR (Status)) {
+    DEBUG ((DEBUG_ERROR, "DXE: FvCheck GetAttributes returned %r\n", Status));
     return Status;
   }
 
   Size = (UINTN)FwVolHeader->FvLength;
+  DEBUG ((DEBUG_ERROR, "DXE: FvCheck In (FvbAttributes=0x%08x, FvLength=0x%lx)\n", FvbAttributes, (UINT64)Size));
   if ((FvbAttributes & EFI_FVB2_MEMORY_MAPPED) != 0) {
     FvDevice->IsMemoryMapped = TRUE;
 
     Status = Fvb->GetPhysicalAddress (Fvb, &PhysicalAddress);
     if (EFI_ERROR (Status)) {
+      DEBUG ((DEBUG_ERROR, "DXE: FvCheck GetPhysicalAddress returned %r\n", Status));
       return Status;
     }
 
@@ -360,9 +369,12 @@ FvCheck (
     FvDevice->CachedFv       = AllocatePool (Size);
 
     if (FvDevice->CachedFv == NULL) {
+      DEBUG ((DEBUG_ERROR, "DXE: FvCheck AllocatePool(0x%lx) FAILED!\n", (UINT64)Size));
       return EFI_OUT_OF_RESOURCES;
     }
   }
+
+  DEBUG ((DEBUG_ERROR, "DXE: FvCheck MemoryMapped=%d, CachedFv=%p\n", FvDevice->IsMemoryMapped, FvDevice->CachedFv));
 
   //
   // Remember a pointer to the end of the CachedFv
@@ -593,10 +605,17 @@ NotifyFwVolBlock (
   FV_DEVICE                           *FvDevice;
   EFI_FIRMWARE_VOLUME_HEADER          *FwVolHeader;
 
+  DEBUG ((DEBUG_ERROR, "DXE: NotifyFwVolBlock In (Event=%p)\n", Event));
+  *(volatile UINT32 *)(UINTN)0x0B017008 = 0; // WDT0_EN = 0 (DISABLE)
+  *(volatile UINT32 *)(UINTN)0x0B017004 = 1; // WDT0_RST = 1 (PET)
+
   //
   // Examine all new handles
   //
   for ( ; ;) {
+    *(volatile UINT32 *)(UINTN)0x0B017008 = 0; // WDT0_EN = 0 (DISABLE)
+    *(volatile UINT32 *)(UINTN)0x0B017004 = 1; // WDT0_RST = 1 (PET)
+
     //
     // Get the next handle
     //
@@ -609,6 +628,7 @@ NotifyFwVolBlock (
                    &Handle
                    );
 
+    DEBUG ((DEBUG_ERROR, "DXE: NotifyFwVolBlock CoreLocateHandle Status=%r, Handle=%p\n", Status, Handle));
     //
     // If not found, we're done
     //
@@ -624,28 +644,36 @@ NotifyFwVolBlock (
     // Get the FirmwareVolumeBlock protocol on that handle
     //
     Status = CoreHandleProtocol (Handle, &gEfiFirmwareVolumeBlockProtocolGuid, (VOID **)&Fvb);
+    DEBUG ((DEBUG_ERROR, "DXE: NotifyFwVolBlock CoreHandleProtocol Fvb=%p, Status=%r\n", Fvb, Status));
     ASSERT_EFI_ERROR (Status);
     ASSERT (Fvb != NULL);
 
     //
     // Make sure the Fv Header is O.K.
     //
+    DEBUG ((DEBUG_ERROR, "DXE: NotifyFwVolBlock Calling GetFwVolHeader...\n"));
     Status = GetFwVolHeader (Fvb, &FwVolHeader);
+    DEBUG ((DEBUG_ERROR, "DXE: NotifyFwVolBlock GetFwVolHeader Status=%r, Header=%p\n", Status, FwVolHeader));
     if (EFI_ERROR (Status)) {
       continue;
     }
 
     ASSERT (FwVolHeader != NULL);
 
+    DEBUG ((DEBUG_ERROR, "DXE: NotifyFwVolBlock Calling VerifyFvHeaderChecksum (HeaderLen=%u, Sig=0x%08x)...\n",
+            FwVolHeader->HeaderLength, FwVolHeader->Signature));
     if (!VerifyFvHeaderChecksum (FwVolHeader)) {
+      DEBUG ((DEBUG_ERROR, "DXE: NotifyFwVolBlock VerifyFvHeaderChecksum FAILED!\n"));
       CoreFreePool (FwVolHeader);
       continue;
     }
+    DEBUG ((DEBUG_ERROR, "DXE: NotifyFwVolBlock VerifyFvHeaderChecksum OK\n"));
 
     //
     // Check if there is an FV protocol already installed in that handle
     //
     Status = CoreHandleProtocol (Handle, &gEfiFirmwareVolume2ProtocolGuid, (VOID **)&Fv);
+    DEBUG ((DEBUG_ERROR, "DXE: NotifyFwVolBlock Check existing FV2 Status=%r, Fv=%p\n", Status, Fv));
     if (!EFI_ERROR (Status)) {
       //
       // Update Fv to use a new Fvb
@@ -661,8 +689,10 @@ NotifyFwVolBlock (
       //
       // No FwVol protocol on the handle so create a new one
       //
+      DEBUG ((DEBUG_ERROR, "DXE: NotifyFwVolBlock Allocating FvDevice...\n"));
       FvDevice = AllocateCopyPool (sizeof (FV_DEVICE), &mFvDevice);
       if (FvDevice == NULL) {
+        DEBUG ((DEBUG_ERROR, "DXE: NotifyFwVolBlock AllocateCopyPool FAILED!\n"));
         return;
       }
 
@@ -676,8 +706,9 @@ NotifyFwVolBlock (
       //
       FvDevice->AuthenticationStatus = GetFvbAuthenticationStatus (Fvb);
 
-      DEBUG ((DEBUG_ERROR, "DXE: NotifyFwVolBlock calling FvCheck on handle %p...\n", Handle));
+      DEBUG ((DEBUG_ERROR, "DXE: NotifyFwVolBlock calling FvCheck on handle %p (FvDevice=%p)...\n", Handle, FvDevice));
       if (!EFI_ERROR (FvCheck (FvDevice))) {
+        DEBUG ((DEBUG_ERROR, "DXE: NotifyFwVolBlock FvCheck SUCCESS! Installing FV2 protocol...\n"));
         //
         // Install an New FV protocol on the existing handle
         //
@@ -687,8 +718,10 @@ NotifyFwVolBlock (
                    EFI_NATIVE_INTERFACE,
                    &FvDevice->Fv
                    );
+        DEBUG ((DEBUG_ERROR, "DXE: CoreInstallProtocolInterface FV2 returned %r\n", Status));
         ASSERT_EFI_ERROR (Status);
       } else {
+        DEBUG ((DEBUG_ERROR, "DXE: FvCheck FAILED for handle %p\n", Handle));
         //
         // Free FvDevice Buffer for the corrupt FV image.
         //
@@ -697,6 +730,7 @@ NotifyFwVolBlock (
     }
   }
 
+  DEBUG ((DEBUG_ERROR, "DXE: NotifyFwVolBlock Out\n"));
   return;
 }
 
@@ -726,5 +760,6 @@ FwVolDriverInit (
                           NULL,
                           &gEfiFwVolBlockNotifyReg
                           );
+  DEBUG ((DEBUG_ERROR, "DXE: FwVolDriverInit Out (Event=%p)\n", gEfiFwVolBlockEvent));
   return EFI_SUCCESS;
 }

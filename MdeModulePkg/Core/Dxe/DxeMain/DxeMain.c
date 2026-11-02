@@ -538,6 +538,20 @@ DxeMain (
   DEBUG ((DEBUG_ERROR, "DXE: FwVolBlockDriverInit returned %r\n", Status));
 
   DEBUG ((DEBUG_ERROR, "DXE: Calling FwVolDriverInit...\n"));
+#if defined(__aarch64__)
+  {
+    UINT64 SctlrVal = 0;
+    __asm__ volatile ("mrs %0, sctlr_el1" : "=r" (SctlrVal));
+    DEBUG ((DEBUG_ERROR, "DXE: SCTLR_EL1 = 0x%016lx (A=%d, SA=%d, M=%d, C=%d, I=%d)\n",
+            SctlrVal, (int)((SctlrVal >> 1) & 1), (int)((SctlrVal >> 3) & 1),
+            (int)(SctlrVal & 1), (int)((SctlrVal >> 2) & 1), (int)((SctlrVal >> 12) & 1)));
+    if (SctlrVal & (1ULL << 1)) {
+      DEBUG ((DEBUG_ERROR, "DXE: SCTLR_EL1.A was SET! Clearing alignment check bit!\n"));
+      SctlrVal &= ~(1ULL << 1);
+      __asm__ volatile ("msr sctlr_el1, %0\n  isb" : : "r" (SctlrVal));
+    }
+  }
+#endif
   Status = FwVolDriverInit (gDxeCoreImageHandle, gDxeCoreST);
   ASSERT_EFI_ERROR (Status);
   DEBUG ((DEBUG_ERROR, "DXE: FwVol Drivers Initialized\n"));

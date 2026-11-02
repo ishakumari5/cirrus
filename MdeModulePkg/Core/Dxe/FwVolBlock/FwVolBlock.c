@@ -99,6 +99,9 @@ FwVolBlockGetAttributes (
 
   FvbDevice = FVB_DEVICE_FROM_THIS (This);
 
+  *(volatile UINT32 *)(UINTN)0x0B017008 = 0; // WDT0_EN = 0 (DISABLE)
+  *(volatile UINT32 *)(UINTN)0x0B017004 = 1; // WDT0_RST = 1 (PET)
+
   //
   // Since we are read only, it's safe to get attributes data from our in-memory copy.
   //
@@ -201,6 +204,9 @@ FwVolBlockReadBlock (
   UINTN                       LbaIndex;
 
   FvbDevice = FVB_DEVICE_FROM_THIS (This);
+
+  *(volatile UINT32 *)(UINTN)0x0B017008 = 0; // WDT0_EN = 0 (DISABLE)
+  *(volatile UINT32 *)(UINTN)0x0B017004 = 1; // WDT0_RST = 1 (PET)
 
   //
   // Check if This FW can be read
@@ -309,6 +315,9 @@ FwVolBlockGetPhysicalAddress (
 
   FvbDevice = FVB_DEVICE_FROM_THIS (This);
 
+  *(volatile UINT32 *)(UINTN)0x0B017008 = 0; // WDT0_EN = 0 (DISABLE)
+  *(volatile UINT32 *)(UINTN)0x0B017004 = 1; // WDT0_RST = 1 (PET)
+
   if ((FvbDevice->FvbAttributes & EFI_FVB2_MEMORY_MAPPED) != 0) {
     *Address = FvbDevice->BaseAddress;
     return EFI_SUCCESS;
@@ -349,6 +358,9 @@ FwVolBlockGetBlockSize (
   EFI_FIRMWARE_VOLUME_HEADER  *FwVolHeader;
 
   FvbDevice = FVB_DEVICE_FROM_THIS (This);
+
+  *(volatile UINT32 *)(UINTN)0x0B017008 = 0; // WDT0_EN = 0 (DISABLE)
+  *(volatile UINT32 *)(UINTN)0x0B017004 = 1; // WDT0_RST = 1 (PET)
 
   //
   // Do parameter checking
