@@ -77,26 +77,19 @@ _ModuleEntryPoint:
   bl ASM_PFX(ArmInvalidateTlb)
 
   mrs x0, sctlr_el1
+  bic x0, x0, #(1 << 1)   /* Clear bit 1 (A): Disable strict alignment fault checking */
   orr x0, x0, #CTRL_SPAN_BIT
   msr sctlr_el1, x0
+  isb
 
 _SetupExceptionVector:
-  ldr x0, =FixedPcdGet64(PcdCpuVectorBaseAddress)
+  adr x0, PrePiVectorTable
   bl ArmWriteVBar
 
   mrs     x4, mpidr_el1
   and     x4, x4, #0xFFFF
   lsr     x4, x4, #8
   cbnz    x4, SecondaryCpuEntry
-
-  ldr x1, dead
-  add x2, x0, #0x800
-  mov x3, x0
-
-_FillVectors:
-  stp     x1, x1, [x3], #16 /* Fill every 16 byte */
-  cmp     x3, x2
-  b.lt    _FillVectors
 
 _DonNotTrap_VFP_SIMD:
   mrs x0, CPACR_EL1
@@ -195,3 +188,269 @@ _ClearStackSecondary:
 secondarydead:
   wfe
   b secondarydead                      /* We should never get here */
+
+/*
+ * Diagnostic AArch64 Exception Vector Table for PrePi / early DXE.
+ * Must be 2048-byte aligned (bits [10:0] == 0) as required by VBAR_EL1.
+ */
+.align 11
+.global PrePiVectorTable
+PrePiVectorTable:
+  /* 0x000: Current EL with SP0 - Synchronous */
+  mov x0, #0x000
+  b ExceptionTrapHandler
+  .align 7
+
+  /* 0x080: Current EL with SP0 - IRQ */
+  mov x0, #0x080
+  b ExceptionTrapHandler
+  .align 7
+
+  /* 0x100: Current EL with SP0 - FIQ */
+  mov x0, #0x100
+  b ExceptionTrapHandler
+  .align 7
+
+  /* 0x180: Current EL with SP0 - SError */
+  mov x0, #0x180
+  b ExceptionTrapHandler
+  .align 7
+
+  /* 0x200: Current EL with SPx - Synchronous (Main EL1 Exception handler) */
+  mov x0, #0x200
+  b ExceptionTrapHandler
+  .align 7
+
+  /* 0x280: Current EL with SPx - IRQ */
+  mov x0, #0x280
+  b ExceptionTrapHandler
+  .align 7
+
+  /* 0x300: Current EL with SPx - FIQ */
+  mov x0, #0x300
+  b ExceptionTrapHandler
+  .align 7
+
+  /* 0x380: Current EL with SPx - SError */
+  mov x0, #0x380
+  b ExceptionTrapHandler
+  .align 7
+
+  /* 0x400: Lower EL using AArch64 - Synchronous */
+  mov x0, #0x400
+  b ExceptionTrapHandler
+  .align 7
+
+  /* 0x480: Lower EL using AArch64 - IRQ */
+  mov x0, #0x480
+  b ExceptionTrapHandler
+  .align 7
+
+  /* 0x500: Lower EL using AArch64 - FIQ */
+  mov x0, #0x500
+  b ExceptionTrapHandler
+  .align 7
+
+  /* 0x580: Lower EL using AArch64 - SError */
+  mov x0, #0x580
+  b ExceptionTrapHandler
+  .align 7
+
+  /* 0x600: Lower EL using AArch32 - Synchronous */
+  mov x0, #0x600
+  b ExceptionTrapHandler
+  .align 7
+
+  /* 0x680: Lower EL using AArch32 - IRQ */
+  mov x0, #0x680
+  b ExceptionTrapHandler
+  .align 7
+
+  /* 0x700: Lower EL using AArch32 - FIQ */
+  mov x0, #0x700
+  b ExceptionTrapHandler
+  .align 7
+
+  /* 0x780: Lower EL using AArch32 - SError */
+  mov x0, #0x780
+  b ExceptionTrapHandler
+  .align 7
+
+.global ExceptionTrapHandler
+ExceptionTrapHandler:
+  /* Pet and disable APCS hardware watchdog immediately */
+  movz  x7, #0x7000
+  movk  x7, #0x0B01, lsl #16
+  movz  x8, #1
+  str   w8, [x7, #0x04]  /* WDT0_RST = 1 (PET) */
+  str   wzr, [x7, #0x08] /* WDT0_EN = 0 (DISABLE) */
+
+  /* Read syndromes */
+  mrs   x1, esr_el1
+  mrs   x2, far_el1
+  mrs   x3, elr_el1
+
+  /* Save to dedicated crash info block at 0x9FFFF000 */
+  movz  x7, #0xF000
+  movk  x7, #0x9FFF, lsl #16
+  str   x0, [x7, #0x00]  /* Vector offset */
+  str   x1, [x7, #0x08]  /* ESR_EL1 */
+  str   x2, [x7, #0x10]  /* FAR_EL1 */
+  str   x3, [x7, #0x18]  /* ELR_EL1 */
+  dc    cvac, x7
+  dsb   sy
+
+  /* Paint top 120 rows on framebuffer (0x90000000) */
+  /* Red (0x000000FF) for Sync, Blue (0x00FF0000) for IRQ, Yellow (0x00FFFF00) for SError */
+  movz  x7, #0x0000
+  movk  x7, #0x9000, lsl #16
+  movz  x8, #0x00FF      /* Red */
+  cmp   x0, #0x280
+  b.ne  1f
+  movz  x8, #0x0000
+  movk  x8, #0x00FF, lsl #16 /* Blue for IRQ */
+1:
+  cmp   x0, #0x380
+  b.ne  2f
+  movz  x8, #0xFF00
+  movk  x8, #0x00FF, lsl #16 /* Yellow for SError */
+2:
+  orr   x8, x8, x8, lsl #32
+  movz  x9, #(720 * 120 / 2)
+.Lpaint_exc:
+  str   x8, [x7], #8
+  subs  x9, x9, #1
+  b.ne  .Lpaint_exc
+
+  /* Format human-readable message into scratch buffer at 0x9FFFF100 */
+  movz  x10, #0xF100
+  movk  x10, #0x9FFF, lsl #16
+  mov   x11, x10
+
+  adr   x12, .Lstr_exc_vec
+  bl    .Lasm_strcpy
+  mov   x13, x0
+  mov   w14, #4
+  bl    .Lasm_hex
+  adr   x12, .Lstr_exc_esr
+  bl    .Lasm_strcpy
+  mov   x13, x1
+  mov   w14, #16
+  bl    .Lasm_hex
+  adr   x12, .Lstr_exc_far
+  bl    .Lasm_strcpy
+  mov   x13, x2
+  mov   w14, #16
+  bl    .Lasm_hex
+  adr   x12, .Lstr_exc_elr
+  bl    .Lasm_strcpy
+  mov   x13, x3
+  mov   w14, #16
+  bl    .Lasm_hex
+  adr   x12, .Lstr_exc_end
+  bl    .Lasm_strcpy
+
+  /* String length = x11 - x10 */
+  sub   x14, x11, x10
+
+  /* Append to 0xBFEC0000 (lk2nd ramoops) */
+  movz  x15, #0x0000
+  movk  x15, #0xBFEC, lsl #16
+  mov   x12, x10
+  mov   x13, x14
+  bl    .Lasm_append_pram
+
+  /* Append to 0x91400000 (stock ramoops) */
+  movz  x15, #0x0000
+  movk  x15, #0x9140, lsl #16
+  mov   x12, x10
+  mov   x13, x14
+  bl    .Lasm_append_pram
+
+  /* Append to 0x9FFF7000 (uefi ramoops) */
+  movz  x15, #0x7000
+  movk  x15, #0x9FFF, lsl #16
+  mov   x12, x10
+  mov   x13, x14
+  bl    .Lasm_append_pram
+
+.Lexc_spin:
+  movz  x7, #0x7000
+  movk  x7, #0x0B01, lsl #16
+  movz  x8, #1
+  str   w8, [x7, #0x04]  /* WDT0_RST = 1 (PET) */
+  str   wzr, [x7, #0x08] /* WDT0_EN = 0 (DISABLE) */
+  movz  x9, #0xFFFF
+.Lexc_delay:
+  subs  x9, x9, #1
+  b.ne  .Lexc_delay
+  b     .Lexc_spin
+
+.Lasm_strcpy:
+  ldrb  w16, [x12], #1
+  cbz   w16, 1f
+  strb  w16, [x11], #1
+  b     .Lasm_strcpy
+1:
+  ret
+
+.Lasm_hex:
+  sub   w14, w14, #1
+  lsl   w14, w14, #2
+.Lhex_inner:
+  lsr   x16, x13, x14
+  and   x16, x16, #0xF
+  cmp   x16, #10
+  add   x17, x16, #'0'
+  add   x18, x16, #('A' - 10)
+  csel  x16, x18, x17, ge
+  strb  w16, [x11], #1
+  subs  w14, w14, #4
+  b.ge  .Lhex_inner
+  ret
+
+.Lasm_append_pram:
+  ldr   w16, [x15]        /* Sig */
+  movz  w17, #0x4244
+  movk  w17, #0x4347, lsl #16  /* "DBGC" = 0x43474244 */
+  cmp   w16, w17
+  b.eq  1f
+  str   w17, [x15]        /* set Sig */
+  str   wzr, [x15, #4]    /* Offt = 0 */
+  movz  w18, #0xFFF0
+  movk  w18, #0x0003, lsl #16
+  str   w18, [x15, #8]    /* Size = 256KB - 16 */
+1:
+  ldr   w16, [x15, #4]    /* Offt */
+  ldr   w17, [x15, #8]    /* Capacity */
+  cbz   w17, 3f
+  mov   x18, x12
+  mov   x19, x13
+2:
+  cbz   x19, 3f
+  ldrb  w20, [x18], #1
+  add   x21, x15, #12
+  add   x21, x21, x16
+  strb  w20, [x21]
+  add   w16, w16, #1
+  cmp   w16, w17
+  csel  w16, wzr, w16, ge
+  sub   x19, x19, #1
+  b     2b
+3:
+  str   w16, [x15, #4]    /* store updated Offt */
+  dc    cvac, x15         /* clean cache */
+  dsb   sy
+  ret
+
+.Lstr_exc_vec:
+  .asciz "\n*** EXCEPTION TRAP: Vector=0x"
+.Lstr_exc_esr:
+  .asciz " ESR=0x"
+.Lstr_exc_far:
+  .asciz " FAR=0x"
+.Lstr_exc_elr:
+  .asciz " ELR=0x"
+.Lstr_exc_end:
+  .asciz " ***\n"
+.align 3
