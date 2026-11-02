@@ -34,13 +34,13 @@ _ModuleEntryPoint:
   movz  x7, #0x7000
   movk  x7, #0x0B01, lsl #16
   movz  x8, #0xFFFF
-  movk  x8, #0xFFFF, lsl #16
-  str   w8, [x7, #0x10]  /* WDT0_BARK_TIME = 0xFFFFFFFF (~36 hours) */
-  str   w8, [x7, #0x14]  /* WDT0_BITE_TIME = 0xFFFFFFFF */
-  str   wzr, [x7, #0x08] /* WDT0_EN = 0 (DISABLE watchdog) */
+  movk  x8, #0x0FFF, lsl #16
+  str   w8, [x7, #0x10]  /* WDT0_BARK_TIME = max ticks (0x0FFFFFFF) */
+  str   w8, [x7, #0x14]  /* WDT0_BITE_TIME = max ticks (0x0FFFFFFF) */
+  str   wzr, [x7, #0x08] /* WDT0_EN = 0 (DISABLE watchdog on KPSS / MSM8953) */
   movz  x8, #1
-  str   w8, [x7, #0x04]  /* WDT0_RST = 1 (PET) */
-  str   w8, [x7]         /* Pet base offset 0 */
+  str   w8, [x7, #0x04]  /* WDT0_RST = 1 (PET/RESET watchdog counter) */
+  str   wzr, [x7, #0x08] /* Keep WDT0_EN = 0 (DISABLE) */
 
   /* Checkpoint 3: PrePi Entry (Paint 40 rows YELLOW at row 80) */
   movz  x7, #(2880 * 80) & 0xFFFF

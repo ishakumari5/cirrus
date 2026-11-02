@@ -17,6 +17,7 @@
 
 [Sources.common]
   Pi.c
+  EarlyQGic/EarlyQGic.c
 
 [Sources.AARCH64]
   ModuleEntryPoint.S | GCC
@@ -61,6 +62,8 @@
   gEfiMdeModulePkgTokenSpaceGuid.PcdFirmwareVersionString
 
 [FixedPcd]
+  gArmTokenSpaceGuid.PcdGicDistributorBase
+  gArmTokenSpaceGuid.PcdGicInterruptInterfaceBase
   gArmTokenSpaceGuid.PcdSystemMemoryBase
   gArmTokenSpaceGuid.PcdSystemMemorySize
   gArmTokenSpaceGuid.PcdCpuVectorBaseAddress

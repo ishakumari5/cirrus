@@ -5,18 +5,20 @@ static ARM_MEMORY_REGION_DESCRIPTOR_EX gDeviceMemoryDescriptorEx[] = {
     /* Name               Address     Length      HobOption        ResourceAttribute    ArmAttributes
                                                           ResourceType          MemoryType */
 
-    /* DDR Partition 0 (Low RAM starting at 0x40000000, 1 GiB total) */
+    /* DDR Partition 0 (Low RAM starting at 0x40000000, 1 GiB total on 3GB onclite) */
     {"RAM Partition 0A",  0x40000000, 0x03400000, AddMem, SYS_MEM, SYS_MEM_CAP, Conv,   WRITE_BACK_XN},
     {"ABOOT Tags & DTB",  0x43400000, 0x00200000, AddMem, MEM_RES, SYS_MEM_CAP, Reserv, WRITE_BACK_XN},
     {"RAM Partition 0B",  0x43600000, 0x3CA00000, AddMem, SYS_MEM, SYS_MEM_CAP, Conv,   WRITE_BACK_XN},
 
-    /* DDR Regions starting at 0x80000000 (Snapdragon 632 / MSM8953 true DDR base, 2 GiB total) */
+    /* DDR Regions starting at 0x80000000 (Snapdragon 632 / MSM8953 true DDR base) */
     {"HLOS Low RAM",      0x80000000, 0x04000000, AddMem, SYS_MEM, SYS_MEM_CAP, Conv,   WRITE_BACK_XN},
     /* PIL Subsystems & SMEM (protects Venus, other_ext, SMEM, Modem, ADSP, WCNSS firmware) */
     {"PIL Subsys & SMEM", 0x84000000, 0x0B600000, AddMem, MEM_RES, SYS_MEM_CAP, Reserv, UNCACHED_UNBUFFERED_XN},
     {"ABOOT / lk2nd",     0x8F600000, 0x00A00000, AddMem, MEM_RES, SYS_MEM_CAP, Reserv, WRITE_BACK_XN},
     {"Display Reserved",  0x90000000, 0x00800000, AddMem, MEM_RES, SYS_MEM_CAP, Reserv, WRITE_THROUGH_XN},
-    {"HLOS Free 2",       0x90800000, 0x0B800000, AddMem, SYS_MEM, SYS_MEM_CAP, Conv,   WRITE_BACK_XN},
+    {"HLOS Free 2A",      0x90800000, 0x00C00000, AddMem, SYS_MEM, SYS_MEM_CAP, Conv,   WRITE_BACK_XN},
+    {"Ramoops / pstore",  0x91400000, 0x00400000, AddMem, MEM_RES, SYS_MEM_CAP, Reserv, WRITE_BACK_XN},
+    {"HLOS Free 2B",      0x91800000, 0x0A800000, AddMem, SYS_MEM, SYS_MEM_CAP, Conv,   WRITE_BACK_XN},
 
     /* UEFI FD (Firmware Device: 32MB at 0x9C000000) */
     {"UEFI FD",           0x9C000000, 0x02000000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK},

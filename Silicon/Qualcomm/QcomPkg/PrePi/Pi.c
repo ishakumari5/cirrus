@@ -13,6 +13,7 @@
 #include <Ppi/GuidedSectionExtraction.h>
 
 #include "Pi.h"
+#include "EarlyQGic/EarlyQGic.h"
 
 #define IS_XIP()  (((UINT64)FixedPcdGet64 (PcdFdBaseAddress) > mSystemMemoryEnd) ||\
                   ((FixedPcdGet64 (PcdFdBaseAddress) + FixedPcdGet32 (PcdFdSize)) <= FixedPcdGet64 (PcdSystemMemoryBase)))
@@ -82,6 +83,10 @@ PrePiMain(
 
   // Initialize MMU
   Status = MemoryPeim(UefiMemoryBase, UefiMemorySize);
+  ASSERT_EFI_ERROR (Status);
+
+  // Initialize and reset GIC-400 distributor & CPU interface
+  Status = QGicPeim();
   ASSERT_EFI_ERROR (Status);
 
   // Add HOBs

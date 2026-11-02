@@ -24,62 +24,67 @@ UINTN gHeight = FixedPcdGet32(PcdMipiFrameBufferHeight);
 UINTN gBpp    = FixedPcdGet32(PcdMipiFrameBufferPixelBpp);
 UINTN delay = FixedPcdGet32(PcdMipiFrameBufferDelay);
 
-#define MEMORY_LOG_MAGIC     0x52414D4CUL  /* "RAML" */
-#define MEMORY_LOG_BASE      0x9FFF7000ULL
-#define MEMORY_LOG_SIZE      0x00008000ULL /* 32 KiB */
+#define PERSISTENT_RAM_SIG   0x43474244U  /* "DBGC" - Linux pstore persistent RAM signature */
 
 #pragma pack(push, 1)
 typedef struct {
-  UINT32 Magic;
-  UINT32 HeaderSize;
-  UINT32 BufferSize;
-  UINT32 WriteOffset;
-  UINT32 WrapCount;
-  UINT32 Reserved[3];
-  CHAR8  LogData[];
-} MEMORY_LOG_HEADER;
+  UINT32 Sig;
+  UINT32 Offt;
+  UINT32 Size;
+  CHAR8  Data[];
+} PRAM_BUF;
 #pragma pack(pop)
+
+STATIC VOID AppendToPramBuffer(UINTN BaseAddr, UINT32 TotalSize, IN CONST UINT8 *Buffer, UINTN NumberOfBytes)
+{
+  if (BaseAddr == 0 || TotalSize <= sizeof(PRAM_BUF)) {
+    return;
+  }
+
+  volatile PRAM_BUF *pPram = (volatile PRAM_BUF *)(UINTN)BaseAddr;
+  UINT32 Capacity = TotalSize - (UINT32)sizeof(PRAM_BUF);
+
+  if (pPram->Sig != PERSISTENT_RAM_SIG || pPram->Size != Capacity) {
+    pPram->Sig  = PERSISTENT_RAM_SIG;
+    pPram->Offt = 0;
+    pPram->Size = Capacity;
+  }
+
+  UINT32 Offt = pPram->Offt;
+  if (Offt >= Capacity) {
+    Offt = 0;
+  }
+
+  for (UINTN i = 0; i < NumberOfBytes; i++) {
+    pPram->Data[Offt++] = (CHAR8)Buffer[i];
+    if (Offt >= Capacity) {
+      Offt = 0;
+    }
+  }
+
+  pPram->Offt = Offt;
+  WriteBackDataCacheRange((VOID *)(UINTN)BaseAddr, sizeof(PRAM_BUF));
+}
 
 STATIC VOID LogToMemory(IN CONST UINT8 *Buffer, IN UINTN NumberOfBytes)
 {
-  MEMORY_LOG_HEADER *Header = (MEMORY_LOG_HEADER *)(UINTN)MEMORY_LOG_BASE;
-  if (Header->Magic != MEMORY_LOG_MAGIC ||
-      Header->BufferSize != (UINT32)(MEMORY_LOG_SIZE - sizeof(MEMORY_LOG_HEADER))) {
-    Header->Magic       = MEMORY_LOG_MAGIC;
-    Header->HeaderSize  = sizeof(MEMORY_LOG_HEADER);
-    Header->BufferSize  = (UINT32)(MEMORY_LOG_SIZE - sizeof(MEMORY_LOG_HEADER));
-    Header->WriteOffset = 0;
-    Header->WrapCount   = 0;
-  }
-  UINT32 Capacity = Header->BufferSize;
-  if (Capacity == 0) return;
-  UINT32 Offset = Header->WriteOffset;
-  for (UINTN i = 0; i < NumberOfBytes; i++) {
-    Header->LogData[Offset++] = (CHAR8)Buffer[i];
-    if (Offset >= Capacity) {
-      Offset = 0;
-      Header->WrapCount++;
-    }
-  }
-  Header->WriteOffset = Offset;
-  WriteBackInvalidateDataCacheRange((VOID *)Header, sizeof(MEMORY_LOG_HEADER) + Offset);
+  // 1. lk2nd fastboot ramoops console (0xBFEC0000, 256 KiB)
+  AppendToPramBuffer(0xBFEC0000, 0x00040000, Buffer, NumberOfBytes);
+
+  // 2. Xiaomi onclite / MSM8953 Stock Ramoops console (0x91400000, 2 MiB)
+  AppendToPramBuffer(0x91400000, 0x00200000, Buffer, NumberOfBytes);
+
+  // 3. UEFI dedicated persistent log buffer (0x9FFF7000, 32 KiB)
+  AppendToPramBuffer(0x9FFF7000, 0x00008000, Buffer, NumberOfBytes);
 }
 
 STATIC inline VOID PetAndDisableWatchdog(VOID)
 {
-  *(volatile UINT32 *)(UINTN)0x0B017010 = 0xFFFFFFFF; // Max bark time
-  *(volatile UINT32 *)(UINTN)0x0B017014 = 0xFFFFFFFF; // Max bite time (36 hours)
   *(volatile UINT32 *)(UINTN)0x0B017008 = 0;          // WDT0_EN = 0 (DISABLE)
-  *(volatile UINT32 *)(UINTN)0x0B017004 = 1;          // WDT0_RST = 1 (PET)
-  *(volatile UINT32 *)(UINTN)0x0B017000 = 1;          // Pet offset 0
-}
-
-STATIC VOID SafeDelayMs(UINTN Milliseconds)
-{
-  PetAndDisableWatchdog();
-  if (Milliseconds > 0) {
-    MicroSecondDelay(Milliseconds * 1000);
-  }
+  *(volatile UINT32 *)(UINTN)0x0B017004 = 1;          // WDT0_RST = 1 (PET/RESET)
+  *(volatile UINT32 *)(UINTN)0x0B017010 = 0x0FFFFFFF; // Max bark ticks
+  *(volatile UINT32 *)(UINTN)0x0B017014 = 0x0FFFFFFF; // Max bite ticks
+  *(volatile UINT32 *)(UINTN)0x0B017008 = 0;          // Keep WDT0_EN = 0 (DISABLE)
 }
 
 // Module-used internal routine
@@ -104,7 +109,6 @@ SerialPortInitialize(VOID)
     return RETURN_SUCCESS;
 
   // Interrupt Disable
-  InterruptState = ArmGetInterruptState();
   ArmDisableInterrupts();
 
   // Reset console
@@ -113,8 +117,6 @@ SerialPortInitialize(VOID)
   // Set flag
   m_Initialized = TRUE;
 
-  if (InterruptState)
-    ArmEnableInterrupts();
   return RETURN_SUCCESS;
 }
 
@@ -219,8 +221,6 @@ void FbConPutCharWithFactor(char c, int type, unsigned scale_factor)
   if (m_Position.x >= (int)(m_MaxPosition.x / scale_factor))
     goto newline;
 
-  if (intstate)
-    ArmEnableInterrupts();
   return;
 
 newline:
@@ -243,8 +243,6 @@ newline:
     }
     ResetFb();
     FbConFlush();
-    if (intstate)
-      ArmEnableInterrupts();
     return;
   }
   else {
@@ -252,8 +250,6 @@ newline:
     Pixels += m_Position.y * ((gBpp / 8) * FONT_HEIGHT * gWidth);
     ZeroMem(Pixels, ((gBpp / 8) * FONT_HEIGHT * gWidth) * scale_factor);
     WriteBackInvalidateDataCacheRange(Pixels, ((gBpp / 8) * FONT_HEIGHT * gWidth) * scale_factor);
-    if (intstate)
-      ArmEnableInterrupts();
   }
 }
 
@@ -394,17 +390,6 @@ SerialPortWrite(IN UINT8 *Buffer, IN UINTN NumberOfBytes)
 {
   UINT8 *CONST Final          = &Buffer[NumberOfBytes];
   UINTN        InterruptState;
-  BOOLEAN      MajorMilestone = FALSE;
-
-  if (NumberOfBytes >= 3) {
-    if (Buffer[0] == '=' && Buffer[1] == '=' && Buffer[2] == '=') MajorMilestone = TRUE;
-    else if (NumberOfBytes >= 4 && Buffer[1] == '=' && Buffer[2] == '=' && Buffer[3] == '=') MajorMilestone = TRUE;
-    else if (NumberOfBytes >= 8 && Buffer[0] == 'D' && Buffer[1] == 'I' && Buffer[2] == 'S' && Buffer[3] == 'P' && Buffer[4] == 'A' && Buffer[5] == 'T' && Buffer[6] == 'C' && Buffer[7] == 'H') MajorMilestone = TRUE;
-    else if (NumberOfBytes >= 4 && Buffer[0] == 'P' && Buffer[1] == 'C' && Buffer[2] == 'D' && Buffer[3] == ':') MajorMilestone = TRUE;
-    else if (NumberOfBytes >= 8 && Buffer[0] == 'A' && Buffer[1] == 'P' && Buffer[2] == 'R' && Buffer[3] == 'I' && Buffer[4] == 'O' && Buffer[5] == 'R' && Buffer[6] == 'I' && Buffer[7] == ':') MajorMilestone = TRUE;
-    else if (NumberOfBytes >= 7 && Buffer[0] == 'C' && Buffer[1] == 'P' && Buffer[2] == 'U' && Buffer[3] == 'D' && Buffer[4] == 'X' && Buffer[5] == 'E' && Buffer[6] == ':') MajorMilestone = TRUE;
-    else if (NumberOfBytes >= 6 && Buffer[0] == 'G' && Buffer[1] == 'I' && Buffer[2] == 'C' && Buffer[3] == 'V' && Buffer[4] == '2' && Buffer[5] == ':') MajorMilestone = TRUE;
-  }
 
   if (!m_Initialized)
     SerialPortInitialize();
@@ -433,12 +418,6 @@ SerialPortWrite(IN UINT8 *Buffer, IN UINTN NumberOfBytes)
     FbConFlush();
   }
 
-  if (MajorMilestone) {
-    SafeDelayMs(800);
-  }
-
-  if (InterruptState)
-    ArmEnableInterrupts();
   return NumberOfBytes;
 }
 
@@ -452,6 +431,8 @@ SerialPortWriteCritical(IN UINT8 *Buffer, IN UINTN NumberOfBytes)
 
   ArmDisableInterrupts();
   m_Color.Foreground = FB_BGRA8888_YELLOW;
+
+  LogToMemory(Buffer, NumberOfBytes);
 
   INTN start_y = m_Position.y;
   while (Buffer < Final) {
@@ -470,8 +451,6 @@ SerialPortWriteCritical(IN UINT8 *Buffer, IN UINTN NumberOfBytes)
 
   m_Color.Foreground = CurrentForeground;
 
-  if (InterruptState)
-    ArmEnableInterrupts();
   return NumberOfBytes;
 }
 

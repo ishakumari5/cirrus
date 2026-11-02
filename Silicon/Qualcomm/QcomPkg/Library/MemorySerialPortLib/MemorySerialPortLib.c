@@ -17,7 +17,12 @@
 #define MEMORY_LOG_BASE      0x9FFF7000ULL
 #define MEMORY_LOG_SIZE      0x00008000ULL /* 32 KiB */
 
+#define APCS_WDT0_BASE       0x0B017000ULL
 #define APCS_WDT0_RST_REG    0x0B017004ULL
+#define APCS_WDT0_CTL_REG    0x0B017008ULL
+#define APCS_WDT0_EN_REG     0x0B017008ULL
+#define APCS_WDT0_BARK_REG   0x0B017010ULL
+#define APCS_WDT0_BITE_REG   0x0B017014ULL
 
 #pragma pack(push, 1)
 typedef struct {
@@ -37,6 +42,13 @@ SerialPortInitialize (
   VOID
   )
 {
+  /* Disable hardware watchdog and extend bite timer */
+  *(volatile UINT32 *)(UINTN)APCS_WDT0_BARK_REG = 0xFFFFFFFF;
+  *(volatile UINT32 *)(UINTN)APCS_WDT0_BITE_REG = 0xFFFFFFFF;
+  *(volatile UINT32 *)(UINTN)APCS_WDT0_RST_REG  = 1;
+  *(volatile UINT32 *)(UINTN)APCS_WDT0_BASE     = 1;
+  *(volatile UINT32 *)(UINTN)APCS_WDT0_CTL_REG  = 0;
+
   MEMORY_LOG_HEADER *Header = (MEMORY_LOG_HEADER *)(UINTN)MEMORY_LOG_BASE;
 
   if (Header->Magic != MEMORY_LOG_MAGIC ||
@@ -70,6 +82,7 @@ SerialPortWrite (
 
   /* Keep the hardware watchdog alive */
   *(volatile UINT32 *)(UINTN)APCS_WDT0_RST_REG = 1;
+  *(volatile UINT32 *)(UINTN)APCS_WDT0_BASE    = 1;
 
   Header = (MEMORY_LOG_HEADER *)(UINTN)MEMORY_LOG_BASE;
   if (Header->Magic != MEMORY_LOG_MAGIC) {

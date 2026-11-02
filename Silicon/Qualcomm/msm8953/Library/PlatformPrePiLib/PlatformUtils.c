@@ -13,6 +13,7 @@
 #include <Library/CacheMaintenanceLib.h>
 
 #include "PlatformUtils.h"
+#include "BuildInfo.h"
 
 #define MDP_BASE                        0x01A00000
 #define MDP_CTL_0_BASE                  0x01A02000
@@ -114,30 +115,32 @@ VOID UartInit(VOID)
   InitializeSharedUartBuffers();
 
   DEBUG((EFI_D_ERROR, "\nRenegade Project edk2-msm (AArch64)\n"));
-  DEBUG(
-      (EFI_D_ERROR, "Firmware onclite [%a %a - v6]\n\n",
-       __TIME__, __DATE__));
+  DEBUG((EFI_D_ERROR, "Firmware onclite [%a]\n", BUILD_INFO_STRING));
+  DEBUG((EFI_D_ERROR, "Build Date: %a\n\n", BUILD_TIME_IST));
 }
 
 VOID SetWatchdogState(BOOLEAN Enable)
 {
   MmioWrite32(APCS_WDOG_CTL_REG, Enable ? 1 : 0);
+  MmioWrite32(APCS_WDOG_RST_REG, 1);
 }
 
 VOID CeaseWatchdog(VOID)
 {
-  // 1. Set Bark and Bite timeouts to maximum (~36 hours)
-  MmioWrite32(APCS_WDOG_BARK_VAL_REG, 0xFFFFFFFF);
-  MmioWrite32(APCS_WDOG_BITE_VAL_REG, 0xFFFFFFFF);
-  // 2. Disable WDT0_EN (0x0B017008)
-  SetWatchdogState(FALSE);
-  // 3. Pet WDT0_RST (0x0B017004) and base trigger
+  // 1. Disable watchdog first: WDT0_EN (0x0B017008) = 0
+  MmioWrite32(APCS_WDOG_CTL_REG, 0);
+  // 2. Pet/reset counter: WDT0_RST (0x0B017004) = 1
   MmioWrite32(APCS_WDOG_RST_REG, 1);
-  MmioWrite32(APCS_WDOG_BASE, 1);
+  // 3. Set Bark and Bite timeouts to maximum ticks
+  MmioWrite32(APCS_WDOG_BARK_VAL_REG, 0x0FFFFFFF);
+  MmioWrite32(APCS_WDOG_BITE_VAL_REG, 0x0FFFFFFF);
+  // 4. Ensure WDT0_EN remains 0 (disabled)
+  MmioWrite32(APCS_WDOG_CTL_REG, 0);
 }
 
 VOID PetWatchdog(VOID)
 {
+  MmioWrite32(APCS_WDOG_CTL_REG, 0);
   MmioWrite32(APCS_WDOG_RST_REG, 1);
 }
 

@@ -175,6 +175,14 @@ FdtReadCells(IN CONST fdt32_t *CellPtr, IN INT32 CellCount)
 
 STATIC
 VOID
+PetWatchdog(VOID)
+{
+  MmioWrite32(0x0B017008, 0);
+  MmioWrite32(0x0B017004, 1);
+}
+
+STATIC
+VOID
 ParseFdtReservedMemory(VOID)
 {
   VOID                 *FdtAddress = (VOID *)(UINTN)0x43400000;
@@ -183,6 +191,10 @@ ParseFdtReservedMemory(VOID)
   INT32                AddrCells = 2;
   INT32                SizeCells = 2;
   INT32                LockedCount = 0;
+  INT32                Iterations = 0;
+
+  DEBUG((EFI_D_INFO, "[PlatformPei] ParseFdtReservedMemory In\n"));
+  PetWatchdog();
 
   // 1. Check primary lk2nd tags address at 0x43400000
   if (fdt_check_header(FdtAddress) != 0) {
@@ -248,6 +260,12 @@ ParseFdtReservedMemory(VOID)
     CONST VOID    *NoMapProp  = fdt_getprop(FdtAddress, SubNode, "no-map", &PropLen);
     CONST fdt32_t *RegProp    = (CONST fdt32_t *)fdt_getprop(FdtAddress, SubNode, "reg", &PropLen);
 
+    PetWatchdog();
+    if (++Iterations > 100) {
+      DEBUG((EFI_D_WARN, "[PlatformPei] Warning: Reached max subnode limit (100)\n"));
+      break;
+    }
+
     if (NoMapProp != NULL && RegProp != NULL && PropLen >= (INT32)((AddrCells + SizeCells) * sizeof(fdt32_t))) {
       INT32 TupleSize = (AddrCells + SizeCells) * (INT32)sizeof(fdt32_t);
       INT32 NumRanges = PropLen / TupleSize;
@@ -288,6 +306,7 @@ ParseFdtReservedMemory(VOID)
     }
   }
 
+  PetWatchdog();
   DEBUG((EFI_D_INFO, "[PlatformPei] Dynamic FDT scan complete: %d TrustZone carveouts locked\n", LockedCount));
 }
 
@@ -295,42 +314,8 @@ STATIC
 VOID
 LockCriticalPlatformRegions(VOID)
 {
-  // 1. FrameBuffer (Continuous Splash MDP5 Scanout 720x1520x4 at 0x90000000, 8 MiB)
-  EFI_PHYSICAL_ADDRESS FbBase = FixedPcdGet64(PcdMipiFrameBufferAddress);
-  BuildResourceDescriptorHob(
-    EFI_RESOURCE_MEMORY_RESERVED,
-    EFI_RESOURCE_ATTRIBUTE_WRITE_THROUGH_CACHEABLE,
-    FbBase,
-    0x00800000
-  );
-  BuildMemoryAllocationHob(FbBase, 0x00800000, EfiReservedMemoryType);
-
-  // 2. RAMoops Memory Log Buffer (0x9FFF7000, 32 KiB)
-  BuildResourceDescriptorHob(
-    EFI_RESOURCE_MEMORY_RESERVED,
-    EFI_RESOURCE_ATTRIBUTE_WRITE_BACK_CACHEABLE,
-    0x9FFF7000,
-    0x00008000
-  );
-  BuildMemoryAllocationHob(0x9FFF7000, 0x00008000, EfiReservedMemoryType);
-
-  // 3. ABOOT / lk2nd Execution & Scratch Region (0x8F600000, 10 MiB)
-  BuildResourceDescriptorHob(
-    EFI_RESOURCE_MEMORY_RESERVED,
-    EFI_RESOURCE_ATTRIBUTE_WRITE_BACK_CACHEABLE,
-    0x8F600000,
-    0x00A00000
-  );
-  BuildMemoryAllocationHob(0x8F600000, 0x00A00000, EfiReservedMemoryType);
-
-  // 4. Qualcomm Secure Execution Environment / TrustZone (0xF2000000, 224 MiB up to 0xFFFFFFFF)
-  BuildResourceDescriptorHob(
-    EFI_RESOURCE_MEMORY_RESERVED,
-    EFI_RESOURCE_ATTRIBUTE_UNCACHEABLE,
-    0xF2000000,
-    0x0E000000
-  );
-  BuildMemoryAllocationHob(0xF2000000, 0x0E000000, EfiReservedMemoryType);
+  DEBUG((EFI_D_INFO, "[PlatformPei] LockCriticalPlatformRegions In\n"));
+  PetWatchdog();
 }
 
 EFI_STATUS
@@ -339,20 +324,27 @@ PlatformPeim(
   VOID
   )
 {
+  PetWatchdog();
   DEBUG((EFI_D_INFO, "[PlatformPei] Installing FV HOB: Base=0x%llx, Size=0x%x\n",
          PcdGet64(PcdFvBaseAddress), PcdGet32(PcdFvSize)));
   BuildFvHob(PcdGet64(PcdFvBaseAddress), PcdGet32(PcdFvSize));
 
+  DEBUG((EFI_D_INFO, "[PlatformPei] InstallPlatformHob In\n"));
   InstallPlatformHob();
+  DEBUG((EFI_D_INFO, "[PlatformPei] InstallPlatformHob Out\n"));
 
+  PetWatchdog();
   // Dynamically parse /reserved-memory from lk2nd FDT and lock no-map carveouts
   ParseFdtReservedMemory();
 
-  // Lock critical platform regions (FB, RAMoops, lk2nd, TZ)
+  PetWatchdog();
+  // Lock critical platform regions
   LockCriticalPlatformRegions();
 
+  PetWatchdog();
   // Checkpoint: TrustZone carveouts locked and HOBs ready
   DEBUG_COLOR_TRAP(COLOR_GREEN);
 
+  DEBUG((EFI_D_INFO, "[PlatformPei] PlatformPeim Done\n"));
   return EFI_SUCCESS;
 }
