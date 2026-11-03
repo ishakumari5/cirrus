@@ -354,6 +354,7 @@ void FbConDrawglyph(
 /* TODO: Take stride into account */
 void FbConScrollUp(void)
 {
+  PetAndDisableWatchdog();
   unsigned short *dst   = (void *)FixedPcdGet32(PcdMipiFrameBufferAddress);
   unsigned short *src   = dst + (gWidth * FONT_HEIGHT);
   unsigned        count = gWidth * (gHeight - FONT_HEIGHT);
@@ -367,6 +368,7 @@ void FbConScrollUp(void)
     *dst++ = m_Color.Background;
   }
 
+  PetAndDisableWatchdog();
   FbConFlush();
 }
 
@@ -375,6 +377,7 @@ void FbConFlush(void)
   unsigned total_x, total_y;
   unsigned bytes_per_bpp;
 
+  PetAndDisableWatchdog();
   total_x       = gWidth;
   total_y       = gHeight;
   bytes_per_bpp = (gBpp / 8);
@@ -382,6 +385,7 @@ void FbConFlush(void)
   WriteBackInvalidateDataCacheRange(
       (void *)FixedPcdGet32(PcdMipiFrameBufferAddress),
       (total_x * total_y * bytes_per_bpp));
+  PetAndDisableWatchdog();
 }
 
 UINTN
