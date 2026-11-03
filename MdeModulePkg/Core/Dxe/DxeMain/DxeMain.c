@@ -284,11 +284,9 @@ DxeMain (
   // Initialize Memory Services
   //
   CoreInitializeMemoryServices (&HobStart, &MemoryBaseAddress, &MemoryLength);
-  CoreSleepAndPet (10, "Step D1: Memory Services Initialized");
   FbFillScreen(0x00FF0000); // RED right after CoreInitializeMemoryServices
 
   MemoryProfileInit (HobStart);
-  CoreSleepAndPet (10, "Step D2: Allocating System & Runtime Tables");
 
   //
   // Allocate the EFI System Table and EFI Runtime Service Table from EfiRuntimeServicesData
@@ -305,14 +303,12 @@ DxeMain (
   //
   // Start the Image Services.
   //
-  CoreSleepAndPet (10, "Step D3: Calling CoreInitializeImageServices");
   Status = CoreInitializeImageServices (HobStart);
   ASSERT_EFI_ERROR (Status);
 
   //
   // Initialize the Global Coherency Domain Services
   //
-  CoreSleepAndPet (10, "Step D4: Calling CoreInitializeGcdServices");
   Status = CoreInitializeGcdServices (&HobStart, MemoryBaseAddress, MemoryLength);
   ASSERT_EFI_ERROR (Status);
 
@@ -321,11 +317,9 @@ DxeMain (
   //
   DEBUG ((DEBUG_ERROR, "DXE: Running Library Constructors...\n"));
   FbFillScreen(0x00FFFF00); // YELLOW: Running Library Constructors
-  CoreSleepAndPet (10, "Step D5: Calling ProcessLibraryConstructorList");
   ProcessLibraryConstructorList (gDxeCoreImageHandle, gDxeCoreST);
   DEBUG ((DEBUG_ERROR, "DXE: Library Constructors Done\n"));
   FbFillScreen(0x0000FF00); // GREEN right after DXE: Library Constructors Done
-  CoreSleepAndPet (10, "Step D6: Library Constructors Done");
   PERF_CROSSMODULE_END ("PEI");
   PERF_CROSSMODULE_BEGIN ("DXE");
   DEBUG ((DEBUG_ERROR, "DXE: CrossModule Perf Done\n"));
@@ -539,13 +533,11 @@ DxeMain (
   // Produce Firmware Volume Protocols, one for each FV in the HOB list.
   //
   DEBUG ((DEBUG_ERROR, "DXE: Calling FwVolBlockDriverInit...\n"));
-  CoreSleepAndPet (10, "Step D7: Calling FwVolBlockDriverInit");
   Status = FwVolBlockDriverInit (gDxeCoreImageHandle, gDxeCoreST);
   ASSERT_EFI_ERROR (Status);
   DEBUG ((DEBUG_ERROR, "DXE: FwVolBlockDriverInit returned %r\n", Status));
 
   DEBUG ((DEBUG_ERROR, "DXE: Calling FwVolDriverInit...\n"));
-  CoreSleepAndPet (10, "Step D8: Calling FwVolDriverInit");
 #if defined(__aarch64__)
   {
     UINT64 SctlrVal = 0;
@@ -567,7 +559,6 @@ DxeMain (
   //
   // Produce the Section Extraction Protocol
   //
-  CoreSleepAndPet (10, "Step D9: Calling InitializeSectionExtraction");
   Status = InitializeSectionExtraction (gDxeCoreImageHandle, gDxeCoreST);
   ASSERT_EFI_ERROR (Status);
   DEBUG ((DEBUG_ERROR, "DXE: Section Extraction Initialized\n"));
@@ -576,7 +567,6 @@ DxeMain (
   // Initialize the DXE Dispatcher
   //
   DEBUG ((DEBUG_ERROR, "DXE: CoreInitializeDispatcher In\n"));
-  CoreSleepAndPet (10, "Step D10: Calling CoreInitializeDispatcher");
   CoreInitializeDispatcher ();
   DEBUG ((DEBUG_ERROR, "DXE: CoreInitializeDispatcher Out\n"));
 
@@ -584,7 +574,6 @@ DxeMain (
   // Invoke the DXE Dispatcher
   //
   DEBUG ((DEBUG_ERROR, "\n=== DXE: INVOKING DRIVER DISPATCHER ===\n"));
-  CoreSleepAndPet (10, "Step D11: Calling CoreDispatcher");
   FbFillScreen(0x000000FF); // BLUE right before CoreDispatcher
   CoreDispatcher ();
 
@@ -1025,9 +1014,8 @@ DxeMainUefiDecompress (
 
 VOID
 __attribute__((noinline))
-CoreSleepAndPet (
-  IN UINT32       Seconds,
-  IN CONST CHAR8  *StepName
+CoreMicroDelayAndPet (
+  IN UINT32  MicroSeconds
   )
 {
   volatile UINT32 *WdtEnable = (volatile UINT32 *)(UINTN)0x0B017008;
@@ -1042,30 +1030,18 @@ CoreSleepAndPet (
   if (TicksPerSec == 0) {
     TicksPerSec = 19200000ULL;
   }
-  UINT64 TotalTicks = TicksPerSec * (UINT64)Seconds;
+  UINT64 TotalTicks = (TicksPerSec * (UINT64)MicroSeconds) / 1000000ULL;
   UINT64 StartTicks = 0;
   __asm__ volatile ("mrs %0, cntpct_el0" : "=r" (StartTicks));
 
-  DEBUG ((DEBUG_ERROR, "\n[SLEEP %us] >>> Entering sleep: %a <<<\n", Seconds, StepName));
-
   UINT64 CurrTicks = StartTicks;
-  UINT32 ElapsedSec = 0;
   while ((CurrTicks - StartTicks) < TotalTicks) {
     *WdtEnable = 0;
     *WdtReset  = 1;
-
     __asm__ volatile ("mrs %0, cntpct_el0" : "=r" (CurrTicks));
-    UINT32 NowSec = (UINT32)((CurrTicks - StartTicks) / TicksPerSec);
-    if (NowSec > ElapsedSec) {
-      ElapsedSec = NowSec;
-      DEBUG ((DEBUG_ERROR, "[SLEEP %us] ... %u/%u s (%a) ...\n", Seconds, ElapsedSec, Seconds, StepName));
-    }
   }
+#endif
 
   *WdtEnable = 0;
   *WdtReset  = 1;
-  DEBUG ((DEBUG_ERROR, "[SLEEP %us] <<< Woke up after %u s! Resuming: %a >>>\n\n", Seconds, Seconds, StepName));
-#else
-  DEBUG ((DEBUG_ERROR, "[SLEEP %us] (Non-AArch64): %a\n", Seconds, StepName));
-#endif
 }

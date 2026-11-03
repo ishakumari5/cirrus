@@ -2452,14 +2452,10 @@ CoreInitializeMemoryServices (
   DEBUG ((DEBUG_INFO, "CoreInitializeMemoryServices:\n"));
   DEBUG ((DEBUG_INFO, "  BaseAddress - 0x%lx Length - 0x%lx MinimalMemorySizeNeeded - 0x%lx\n", BaseAddress, Length, MinimalMemorySizeNeeded));
 
-  CoreSleepAndPet (10, "Step M1: MinimalMemorySizeNeeded Check");
-
   //
   // If no memory regions are found that are big enough to initialize the DXE core, then ASSERT().
   //
   ASSERT (Length >= MinimalMemorySizeNeeded);
-
-  CoreSleepAndPet (10, "Step M2: Converting Capabilities");
 
   //
   // Convert the Resource HOB Attributes to an EFI Memory Capabilities mask
@@ -2469,8 +2465,6 @@ CoreInitializeMemoryServices (
   } else {
     Capabilities = CoreConvertResourceDescriptorHobAttributesToCapabilities (EfiGcdMemoryTypeSystemMemory, Attributes);
   }
-
-  CoreSleepAndPet (5, "Step M3: Calling CoreAddMemoryDescriptor");
 
   //
   // Declare the very first memory region, so the EFI Memory Services are available.
@@ -2486,8 +2480,6 @@ CoreInitializeMemoryServices (
   *MemoryBaseAddress = BaseAddress;
   *MemoryLength      = Length;
   DEBUG ((DEBUG_ERROR, "DXE: Gcd assigned MemoryBaseAddress=0x%Lx MemoryLength=0x%Lx\n", BaseAddress, Length));
-
-  CoreSleepAndPet (5, "Step M4: CoreInitializeMemoryServices Returning Success");
 
   return EFI_SUCCESS;
 }

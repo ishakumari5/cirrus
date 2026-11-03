@@ -606,7 +606,6 @@ NotifyFwVolBlock (
   EFI_FIRMWARE_VOLUME_HEADER          *FwVolHeader;
 
   DEBUG ((DEBUG_ERROR, "DXE: NotifyFwVolBlock In (Event=%p)\n", Event));
-  CoreSleepAndPet (10, "Step FV1: NotifyFwVolBlock In");
   *(volatile UINT32 *)(UINTN)0x0B017008 = 0; // WDT0_EN = 0 (DISABLE)
   *(volatile UINT32 *)(UINTN)0x0B017004 = 1; // WDT0_RST = 1 (PET)
 
@@ -710,7 +709,6 @@ NotifyFwVolBlock (
       DEBUG ((DEBUG_ERROR, "DXE: NotifyFwVolBlock calling FvCheck on handle %p (FvDevice=%p)...\n", Handle, FvDevice));
       if (!EFI_ERROR (FvCheck (FvDevice))) {
         DEBUG ((DEBUG_ERROR, "DXE: NotifyFwVolBlock FvCheck SUCCESS! Installing FV2 protocol...\n"));
-        CoreSleepAndPet (10, "Step FV2: FvCheck Succeeded, Installing FV2 Protocol");
         //
         // Install an New FV protocol on the existing handle
         //

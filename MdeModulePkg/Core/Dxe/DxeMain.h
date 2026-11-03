@@ -2803,13 +2803,12 @@ MergeMemoryMap (
   );
 
 /**
-  Diagnostic sleep helper that delays for Seconds, petting the MSM8953 hardware
-  watchdog in a continuous loop and printing progress to console every second.
+  Delays for MicroSeconds, petting the MSM8953 hardware watchdog in a continuous
+  loop to ensure the hardware watchdog never bites during diagnostic delays.
 **/
 VOID
-CoreSleepAndPet (
-  IN UINT32       Seconds,
-  IN CONST CHAR8  *StepName
+CoreMicroDelayAndPet (
+  IN UINT32  MicroSeconds
   );
 
 #endif
