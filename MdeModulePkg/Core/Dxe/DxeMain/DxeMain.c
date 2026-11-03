@@ -1011,6 +1011,40 @@ DxeMainUefiDecompress (
 
 VOID
 __attribute__((noinline))
+CoreMicroDelayAndPet (
+  IN UINT32  MicroSeconds
+  )
+{
+  volatile UINT32 *WdtEnable = (volatile UINT32 *)(UINTN)0x0B017008;
+  volatile UINT32 *WdtReset  = (volatile UINT32 *)(UINTN)0x0B017004;
+
+  *WdtEnable = 0; // WDT0_EN = 0 (DISABLE)
+  *WdtReset  = 1; // WDT0_RST = 1 (PET)
+
+#if defined(__aarch64__)
+  UINT64 TicksPerSec = 0;
+  __asm__ volatile ("mrs %0, cntfrq_el0" : "=r" (TicksPerSec));
+  if (TicksPerSec == 0) {
+    TicksPerSec = 19200000ULL;
+  }
+  UINT64 TotalTicks = (TicksPerSec * (UINT64)MicroSeconds) / 1000000ULL;
+  UINT64 StartTicks = 0;
+  __asm__ volatile ("mrs %0, cntpct_el0" : "=r" (StartTicks));
+
+  UINT64 CurrTicks = StartTicks;
+  while ((CurrTicks - StartTicks) < TotalTicks) {
+    *WdtEnable = 0;
+    *WdtReset  = 1;
+    __asm__ volatile ("mrs %0, cntpct_el0" : "=r" (CurrTicks));
+  }
+#endif
+
+  *WdtEnable = 0;
+  *WdtReset  = 1;
+}
+
+VOID
+__attribute__((noinline))
 CoreSleepAndPet (
   IN UINT32       Seconds,
   IN CONST CHAR8  *StepName

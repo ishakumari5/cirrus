@@ -2802,6 +2802,11 @@ MergeMemoryMap (
   IN UINTN                      DescriptorSize
   );
 
+VOID
+CoreMicroDelayAndPet (
+  IN UINT32  MicroSeconds
+  );
+
 /**
   Diagnostic sleep helper that delays for Seconds, petting the MSM8953 hardware
   watchdog in a continuous loop and printing progress in 3s increments.
