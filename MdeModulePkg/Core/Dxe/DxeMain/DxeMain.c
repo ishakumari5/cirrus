@@ -269,7 +269,6 @@ DxeMain (
   // Initialize Debug Agent to support source level debug in DXE phase
   //
   DEBUG ((DEBUG_ERROR, "\n=== DXE CORE MAIN ENTRY (Hob=%p) ===\n", HobStart));
-  CoreSleepAndPet (60, "DXE Entry 60s Sleep Test");
 
   InitializeDebugAgent (DEBUG_AGENT_INIT_DXE_CORE, HobStart, NULL);
 

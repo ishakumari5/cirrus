@@ -593,6 +593,8 @@ CoreLoadPeImage (
   // Get information about the image being loaded
   //
   Status = PeCoffLoaderGetImageInfo (&Image->ImageContext);
+  DEBUG ((DEBUG_ERROR, "  [PE] GetImageInfo -> %r (Size=0x%lx, Align=0x%x)\n",
+          Status, Image->ImageContext.ImageSize, Image->ImageContext.SectionAlignment));
   if (EFI_ERROR (Status)) {
     return Status;
   }
@@ -699,9 +701,12 @@ CoreLoadPeImage (
     }
 
     if (EFI_ERROR (Status)) {
+      DEBUG ((DEBUG_ERROR, "  [PE] CoreAllocatePages FAILED: %r\n", Status));
       return Status;
     }
 
+    DEBUG ((DEBUG_ERROR, "  [PE] Allocated Addr=0x%lx, Pages=%u\n",
+            Image->ImageContext.ImageAddress, Image->NumberOfPages));
     DstBufAlocated = TRUE;
   } else {
     //
@@ -739,7 +744,9 @@ CoreLoadPeImage (
   //
   // Load the image from the file into the allocated memory
   //
+  DEBUG ((DEBUG_ERROR, "  [PE] Calling PeCoffLoaderLoadImage (Dest=0x%lx)...\n", Image->ImageContext.ImageAddress));
   Status = PeCoffLoaderLoadImage (&Image->ImageContext);
+  DEBUG ((DEBUG_ERROR, "  [PE] PeCoffLoaderLoadImage -> %r\n", Status));
   if (EFI_ERROR (Status)) {
     goto Done;
   }
@@ -762,7 +769,9 @@ CoreLoadPeImage (
   //
   // Relocate the image in memory
   //
+  DEBUG ((DEBUG_ERROR, "  [PE] Calling PeCoffLoaderRelocateImage...\n"));
   Status = PeCoffLoaderRelocateImage (&Image->ImageContext);
+  DEBUG ((DEBUG_ERROR, "  [PE] PeCoffLoaderRelocateImage -> %r\n", Status));
   if (EFI_ERROR (Status)) {
     goto Done;
   }
@@ -770,7 +779,10 @@ CoreLoadPeImage (
   //
   // Flush the Instruction Cache
   //
+  DEBUG ((DEBUG_ERROR, "  [PE] InvalidateInstructionCacheRange (0x%lx, 0x%lx)...\n",
+          Image->ImageContext.ImageAddress, Image->ImageContext.ImageSize));
   InvalidateInstructionCacheRange ((VOID *)(UINTN)Image->ImageContext.ImageAddress, (UINTN)Image->ImageContext.ImageSize);
+  DEBUG ((DEBUG_ERROR, "  [PE] Cache flush done! EntryPoint=0x%lx\n", Image->ImageContext.EntryPoint));
 
   //
   // Copy the machine type from the context to the image private data.
@@ -1248,6 +1260,7 @@ CoreLoadImageCommon (
                      &FHand.SourceSize,
                      &AuthenticationStatus
                      );
+    DEBUG ((DEBUG_ERROR, "[LOAD] GetFileBuffer -> %p (Size=0x%lx)\n", FHand.Source, FHand.SourceSize));
     if (FHand.Source == NULL) {
       Status = EFI_NOT_FOUND;
     } else {
@@ -1376,7 +1389,9 @@ CoreLoadImageCommon (
   //
   // Load the image.  If EntryPoint is Null, it will not be set.
   //
+  DEBUG ((DEBUG_ERROR, "[LOAD] Calling CoreLoadPeImage...\n"));
   Status = CoreLoadPeImage (BootPolicy, &FHand, Image, DstBuffer, EntryPoint, Attribute);
+  DEBUG ((DEBUG_ERROR, "[LOAD] CoreLoadPeImage -> %r\n", Status));
   if (EFI_ERROR (Status)) {
     if ((Status == EFI_BUFFER_TOO_SMALL) || (Status == EFI_OUT_OF_RESOURCES)) {
       if (NumberOfPages != NULL) {

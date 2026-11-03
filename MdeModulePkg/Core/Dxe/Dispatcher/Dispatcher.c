@@ -550,6 +550,7 @@ CoreDispatcher (
                    0,
                    &DriverEntry->ImageHandle
                    );
+        DEBUG ((DEBUG_ERROR, "DISPATCH: CoreLoadImage returned %r (Handle=%p)\n", Status, DriverEntry->ImageHandle));
 
         //
         // Update the driver state to reflect that it's been loaded
