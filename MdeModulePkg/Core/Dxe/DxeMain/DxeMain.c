@@ -1022,3 +1022,50 @@ DxeMainUefiDecompress (
 
   return UefiDecompress (Source, Destination, Scratch);
 }
+
+VOID
+__attribute__((noinline))
+CoreSleepAndPet (
+  IN UINT32       Seconds,
+  IN CONST CHAR8  *StepName
+  )
+{
+  volatile UINT32 *WdtEnable = (volatile UINT32 *)(UINTN)0x0B017008;
+  volatile UINT32 *WdtReset  = (volatile UINT32 *)(UINTN)0x0B017004;
+
+  *WdtEnable = 0; // WDT0_EN = 0 (DISABLE)
+  *WdtReset  = 1; // WDT0_RST = 1 (PET)
+
+#if defined(__aarch64__)
+  UINT64 TicksPerSec = 0;
+  __asm__ volatile ("mrs %0, cntfrq_el0" : "=r" (TicksPerSec));
+  if (TicksPerSec == 0) {
+    TicksPerSec = 19200000ULL;
+  }
+  UINT64 TotalTicks = TicksPerSec * (UINT64)Seconds;
+  UINT64 StartTicks = 0;
+  __asm__ volatile ("mrs %0, cntpct_el0" : "=r" (StartTicks));
+
+  DEBUG ((DEBUG_ERROR, "\n[SLEEP %us] >>> Entering sleep: %a <<<\n", Seconds, StepName));
+
+  UINT64 CurrTicks = StartTicks;
+  UINT32 ElapsedSec = 0;
+  while ((CurrTicks - StartTicks) < TotalTicks) {
+    *WdtEnable = 0;
+    *WdtReset  = 1;
+
+    __asm__ volatile ("mrs %0, cntpct_el0" : "=r" (CurrTicks));
+    UINT32 NowSec = (UINT32)((CurrTicks - StartTicks) / TicksPerSec);
+    if (NowSec > ElapsedSec) {
+      ElapsedSec = NowSec;
+      DEBUG ((DEBUG_ERROR, "[SLEEP %us] ... %u/%u s (%a) ...\n", Seconds, ElapsedSec, Seconds, StepName));
+    }
+  }
+
+  *WdtEnable = 0;
+  *WdtReset  = 1;
+  DEBUG ((DEBUG_ERROR, "[SLEEP %us] <<< Woke up after %u s! Resuming: %a >>>\n\n", Seconds, Seconds, StepName));
+#else
+  DEBUG ((DEBUG_ERROR, "[SLEEP %us] (Non-AArch64): %a\n", Seconds, StepName));
+#endif
+}

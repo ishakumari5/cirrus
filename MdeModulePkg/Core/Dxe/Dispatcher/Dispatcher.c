@@ -517,11 +517,15 @@ CoreDispatcher (
           );
         ASSERT (DriverEntry->ImageHandle != NULL);
 
-        DEBUG ((DEBUG_ERROR, "DISPATCH: Start %g\n", &DriverEntry->FileName));
+        DEBUG ((DEBUG_ERROR, "\n========================================\n"));
+        DEBUG ((DEBUG_ERROR, "[DXE] Starting Driver: %g\n", &DriverEntry->FileName));
+        DEBUG ((DEBUG_ERROR, "========================================\n"));
+        CoreSleepAndPet (2, "Starting Driver");
         *(volatile UINT32 *)(UINTN)0x0B017008 = 0; // WDT0_EN = 0 (DISABLE)
         *(volatile UINT32 *)(UINTN)0x0B017004 = 1; // WDT0_RST = 1 (PET)
         Status = CoreStartImage (DriverEntry->ImageHandle, NULL, NULL);
-        DEBUG ((DEBUG_ERROR, "DISPATCH: Done %g: %r\n", &DriverEntry->FileName, Status));
+        DEBUG ((DEBUG_ERROR, "[DXE] Finished Driver: %g: %r\n\n", &DriverEntry->FileName, Status));
+        CoreSleepAndPet (1, "Finished Driver");
 
         REPORT_STATUS_CODE_WITH_EXTENDED_DATA (
           EFI_PROGRESS_CODE,

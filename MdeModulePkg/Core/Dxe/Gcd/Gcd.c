@@ -2470,7 +2470,7 @@ CoreInitializeMemoryServices (
     Capabilities = CoreConvertResourceDescriptorHobAttributesToCapabilities (EfiGcdMemoryTypeSystemMemory, Attributes);
   }
 
-  CoreSleepAndPet (10, "Step M3: Calling CoreAddMemoryDescriptor");
+  CoreSleepAndPet (5, "Step M3: Calling CoreAddMemoryDescriptor");
 
   //
   // Declare the very first memory region, so the EFI Memory Services are available.
@@ -2482,10 +2482,12 @@ CoreInitializeMemoryServices (
     Capabilities
     );
 
+  DEBUG ((DEBUG_ERROR, "DXE: Gcd returned from CoreAddMemoryDescriptor, assigning MemoryBaseAddress...\n"));
   *MemoryBaseAddress = BaseAddress;
   *MemoryLength      = Length;
+  DEBUG ((DEBUG_ERROR, "DXE: Gcd assigned MemoryBaseAddress=0x%Lx MemoryLength=0x%Lx\n", BaseAddress, Length));
 
-  CoreSleepAndPet (10, "Step M4: CoreInitializeMemoryServices Returning Success");
+  CoreSleepAndPet (5, "Step M4: CoreInitializeMemoryServices Returning Success");
 
   return EFI_SUCCESS;
 }

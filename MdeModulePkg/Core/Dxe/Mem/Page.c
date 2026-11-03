@@ -709,7 +709,8 @@ CoreAddMemoryDescriptor (
   }
 
   mMemoryTypeInformationInitialized = TRUE;
-  CoreSleepAndPet (10, "Step P4: Pre-allocated Memory Type Bins Done");
+  CoreSleepAndPet (5, "Step P4: Pre-allocated Memory Type Bins Done");
+  DEBUG ((DEBUG_ERROR, "DXE: CoreAddMemoryDescriptor Complete! Returning to Gcd...\n"));
 }
 
 /**
