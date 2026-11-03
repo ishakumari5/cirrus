@@ -567,11 +567,15 @@ CoreAddMemoryDescriptor (
     return;
   }
 
+  CoreSleepAndPet (15, "Step P1: CoreAddMemoryDescriptor In");
+
   CoreAcquireMemoryLock ();
   End = Start + LShiftU64 (NumberOfPages, EFI_PAGE_SHIFT) - 1;
   CoreAddRange (Type, Start, End, Attribute);
   CoreFreeMemoryMapStack ();
   CoreReleaseMemoryLock ();
+
+  CoreSleepAndPet (15, "Step P2: CoreAddRange Done, Lock Released");
 
   ApplyMemoryProtectionPolicy (
     EfiMaxMemoryType,
@@ -579,6 +583,8 @@ CoreAddMemoryDescriptor (
     Start,
     LShiftU64 (NumberOfPages, EFI_PAGE_SHIFT)
     );
+
+  CoreSleepAndPet (15, "Step P3: ApplyMemoryProtectionPolicy Done");
 
   //
   // If Loading Module At Fixed Address feature is enabled. try to allocate memory with Runtime code & Boot time code type
@@ -703,6 +709,7 @@ CoreAddMemoryDescriptor (
   }
 
   mMemoryTypeInformationInitialized = TRUE;
+  CoreSleepAndPet (15, "Step P4: Pre-allocated Memory Type Bins Done");
   DEBUG ((DEBUG_ERROR, "DXE: CoreAddMemoryDescriptor Complete! Returning to Gcd...\n"));
 }
 

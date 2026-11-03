@@ -592,6 +592,8 @@ CoreLoadPeImage (
   //
   // Get information about the image being loaded
   //
+  DEBUG ((DEBUG_ERROR, "DXE: CoreLoadPeImage Calling PeCoffLoaderGetImageInfo...\n"));
+  CoreSleepAndPet (15, "LoadPeImage: PeCoffLoaderGetImageInfo");
   Status = PeCoffLoaderGetImageInfo (&Image->ImageContext);
   if (EFI_ERROR (Status)) {
     return Status;
@@ -739,6 +741,9 @@ CoreLoadPeImage (
   //
   // Load the image from the file into the allocated memory
   //
+  DEBUG ((DEBUG_ERROR, "DXE: CoreLoadPeImage Calling PeCoffLoaderLoadImage (ImageAddress=0x%lx Pages=%u)...\n",
+          Image->ImageContext.ImageAddress, Image->NumberOfPages));
+  CoreSleepAndPet (15, "LoadPeImage: PeCoffLoaderLoadImage");
   Status = PeCoffLoaderLoadImage (&Image->ImageContext);
   if (EFI_ERROR (Status)) {
     goto Done;
@@ -762,6 +767,8 @@ CoreLoadPeImage (
   //
   // Relocate the image in memory
   //
+  DEBUG ((DEBUG_ERROR, "DXE: CoreLoadPeImage Calling PeCoffLoaderRelocateImage...\n"));
+  CoreSleepAndPet (15, "LoadPeImage: PeCoffLoaderRelocateImage");
   Status = PeCoffLoaderRelocateImage (&Image->ImageContext);
   if (EFI_ERROR (Status)) {
     goto Done;
@@ -770,7 +777,11 @@ CoreLoadPeImage (
   //
   // Flush the Instruction Cache
   //
+  DEBUG ((DEBUG_ERROR, "DXE: CoreLoadPeImage InvalidateInstructionCacheRange...\n"));
+  CoreSleepAndPet (15, "LoadPeImage: InvalidateInstructionCacheRange");
   InvalidateInstructionCacheRange ((VOID *)(UINTN)Image->ImageContext.ImageAddress, (UINTN)Image->ImageContext.ImageSize);
+  DEBUG ((DEBUG_ERROR, "DXE: CoreLoadPeImage Complete! EntryPoint=0x%lx\n", Image->ImageContext.EntryPoint));
+  CoreSleepAndPet (15, "LoadPeImage: Complete");
 
   //
   // Copy the machine type from the context to the image private data.
@@ -1242,12 +1253,16 @@ CoreLoadImageCommon (
     //
     // Get the source file buffer by its device path.
     //
+    DEBUG ((DEBUG_ERROR, "DXE: CoreLoadImage Calling GetFileBufferByFilePath...\n"));
+    CoreSleepAndPet (15, "LoadImage: Calling GetFileBuffer");
     FHand.Source = GetFileBufferByFilePath (
                      BootPolicy,
                      FilePath,
                      &FHand.SourceSize,
                      &AuthenticationStatus
                      );
+    DEBUG ((DEBUG_ERROR, "DXE: CoreLoadImage GetFileBuffer returned %p (Size=0x%lx)\n", FHand.Source, FHand.SourceSize));
+    CoreSleepAndPet (15, "LoadImage: FileBuffer Read Done");
     if (FHand.Source == NULL) {
       Status = EFI_NOT_FOUND;
     } else {

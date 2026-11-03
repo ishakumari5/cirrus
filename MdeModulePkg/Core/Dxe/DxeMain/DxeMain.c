@@ -284,6 +284,7 @@ DxeMain (
   // Initialize Memory Services
   //
   CoreInitializeMemoryServices (&HobStart, &MemoryBaseAddress, &MemoryLength);
+  CoreSleepAndPet (15, "Step D1: Memory Services Initialized");
   FbFillScreen(0x00FF0000); // RED right after CoreInitializeMemoryServices
 
   MemoryProfileInit (HobStart);
@@ -299,18 +300,21 @@ DxeMain (
   ASSERT (gDxeCoreRT != NULL);
 
   gDxeCoreST->RuntimeServices = gDxeCoreRT;
+  CoreSleepAndPet (15, "Step D2: System & Runtime Tables Ready");
 
   //
   // Start the Image Services.
   //
   Status = CoreInitializeImageServices (HobStart);
   ASSERT_EFI_ERROR (Status);
+  CoreSleepAndPet (15, "Step D3: Image Services Initialized");
 
   //
   // Initialize the Global Coherency Domain Services
   //
   Status = CoreInitializeGcdServices (&HobStart, MemoryBaseAddress, MemoryLength);
   ASSERT_EFI_ERROR (Status);
+  CoreSleepAndPet (15, "Step D4: GCD Services Initialized");
 
   //
   // Call constructor for all libraries
@@ -320,6 +324,7 @@ DxeMain (
   ProcessLibraryConstructorList (gDxeCoreImageHandle, gDxeCoreST);
   DEBUG ((DEBUG_ERROR, "DXE: Library Constructors Done\n"));
   FbFillScreen(0x0000FF00); // GREEN right after DXE: Library Constructors Done
+  CoreSleepAndPet (15, "Step D5: Library Constructors Done");
   PERF_CROSSMODULE_END ("PEI");
   PERF_CROSSMODULE_BEGIN ("DXE");
   DEBUG ((DEBUG_ERROR, "DXE: CrossModule Perf Done\n"));
@@ -536,6 +541,7 @@ DxeMain (
   Status = FwVolBlockDriverInit (gDxeCoreImageHandle, gDxeCoreST);
   ASSERT_EFI_ERROR (Status);
   DEBUG ((DEBUG_ERROR, "DXE: FwVolBlockDriverInit returned %r\n", Status));
+  CoreSleepAndPet (15, "Step D6: FwVolBlockDriverInit Done");
 
   DEBUG ((DEBUG_ERROR, "DXE: Calling FwVolDriverInit...\n"));
 #if defined(__aarch64__)
@@ -555,6 +561,7 @@ DxeMain (
   Status = FwVolDriverInit (gDxeCoreImageHandle, gDxeCoreST);
   ASSERT_EFI_ERROR (Status);
   DEBUG ((DEBUG_ERROR, "DXE: FwVol Drivers Initialized\n"));
+  CoreSleepAndPet (15, "Step D7: FwVolDriverInit Done");
 
   //
   // Produce the Section Extraction Protocol
@@ -562,6 +569,7 @@ DxeMain (
   Status = InitializeSectionExtraction (gDxeCoreImageHandle, gDxeCoreST);
   ASSERT_EFI_ERROR (Status);
   DEBUG ((DEBUG_ERROR, "DXE: Section Extraction Initialized\n"));
+  CoreSleepAndPet (15, "Step D8: Section Extraction Initialized");
 
   //
   // Initialize the DXE Dispatcher
@@ -569,11 +577,13 @@ DxeMain (
   DEBUG ((DEBUG_ERROR, "DXE: CoreInitializeDispatcher In\n"));
   CoreInitializeDispatcher ();
   DEBUG ((DEBUG_ERROR, "DXE: CoreInitializeDispatcher Out\n"));
+  CoreSleepAndPet (15, "Step D9: CoreInitializeDispatcher Out");
 
   //
   // Invoke the DXE Dispatcher
   //
   DEBUG ((DEBUG_ERROR, "\n=== DXE: INVOKING DRIVER DISPATCHER ===\n"));
+  CoreSleepAndPet (15, "Step D10: Calling CoreDispatcher");
   FbFillScreen(0x000000FF); // BLUE right before CoreDispatcher
   CoreDispatcher ();
 
@@ -1014,8 +1024,9 @@ DxeMainUefiDecompress (
 
 VOID
 __attribute__((noinline))
-CoreMicroDelayAndPet (
-  IN UINT32  MicroSeconds
+CoreSleepAndPet (
+  IN UINT32       Seconds,
+  IN CONST CHAR8  *StepName
   )
 {
   volatile UINT32 *WdtEnable = (volatile UINT32 *)(UINTN)0x0B017008;
@@ -1030,18 +1041,35 @@ CoreMicroDelayAndPet (
   if (TicksPerSec == 0) {
     TicksPerSec = 19200000ULL;
   }
-  UINT64 TotalTicks = (TicksPerSec * (UINT64)MicroSeconds) / 1000000ULL;
+  UINT64 TotalTicks = TicksPerSec * (UINT64)Seconds;
   UINT64 StartTicks = 0;
   __asm__ volatile ("mrs %0, cntpct_el0" : "=r" (StartTicks));
 
+  DEBUG ((DEBUG_ERROR, "\n[SLEEP %us] >>> Entering sleep: %a <<<\n", Seconds, StepName));
+
   UINT64 CurrTicks = StartTicks;
+  UINT32 LastReportedSec = 0;
   while ((CurrTicks - StartTicks) < TotalTicks) {
     *WdtEnable = 0;
     *WdtReset  = 1;
-    __asm__ volatile ("mrs %0, cntpct_el0" : "=r" (CurrTicks));
-  }
-#endif
 
+    __asm__ volatile ("mrs %0, cntpct_el0" : "=r" (CurrTicks));
+    UINT32 NowSec = (UINT32)((CurrTicks - StartTicks) / TicksPerSec);
+    // Report in increments of 3s: 3s, 6s, 9s, 12s, 15s
+    if ((NowSec >= LastReportedSec + 3) || (NowSec == Seconds && LastReportedSec < Seconds)) {
+      LastReportedSec = (NowSec / 3) * 3;
+      if (NowSec == Seconds) {
+        LastReportedSec = Seconds;
+      }
+      DEBUG ((DEBUG_ERROR, "[SLEEP %us] ... %u/%u s (%a) ...\n", Seconds, LastReportedSec, Seconds, StepName));
+    }
+  }
+
+  DEBUG ((DEBUG_ERROR, "[SLEEP %us] <<< Woke up after %u s! Resuming: %a >>>\n\n", Seconds, Seconds, StepName));
   *WdtEnable = 0;
   *WdtReset  = 1;
+  __asm__ volatile ("" : : : "memory");
+#else
+  DEBUG ((DEBUG_ERROR, "[SLEEP %us] (Non-AArch64): %a\n", Seconds, StepName));
+#endif
 }
