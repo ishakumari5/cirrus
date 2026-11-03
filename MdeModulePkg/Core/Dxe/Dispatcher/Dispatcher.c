@@ -541,11 +541,7 @@ CoreDispatcher (
       // skip the LoadImage
       //
       if ((DriverEntry->ImageHandle == NULL) && !DriverEntry->IsFvImage) {
-        CONST CHAR8 *DriverName = GetDriverName (&DriverEntry->FileName);
-        DEBUG ((DEBUG_ERROR, "\n========================================\n"));
-        DEBUG ((DEBUG_ERROR, "[DXE] >>> Loading Driver: %a\n[DXE] GUID: %g\n", DriverName, &DriverEntry->FileName));
-        DEBUG ((DEBUG_ERROR, "========================================\n"));
-        CoreSleepAndPet (15, "Loading Driver Image");
+        DEBUG ((DEBUG_ERROR, "DISPATCH: Load %g\n", &DriverEntry->FileName));
         Status = CoreLoadImage (
                    FALSE,
                    gDxeCoreImageHandle,
@@ -554,8 +550,6 @@ CoreDispatcher (
                    0,
                    &DriverEntry->ImageHandle
                    );
-        DEBUG ((DEBUG_ERROR, "[DXE] <<< Loaded Driver: %a: %r (Handle=%p) >>>\n", DriverName, Status, DriverEntry->ImageHandle));
-        CoreSleepAndPet (15, "Driver Image Loaded");
 
         //
         // Update the driver state to reflect that it's been loaded
@@ -619,12 +613,12 @@ CoreDispatcher (
         DEBUG ((DEBUG_ERROR, "\n========================================\n"));
         DEBUG ((DEBUG_ERROR, "[DXE] >>> Starting Driver: %a\n[DXE] GUID: %g\n", DriverName, &DriverEntry->FileName));
         DEBUG ((DEBUG_ERROR, "========================================\n"));
-        CoreSleepAndPet (15, "Starting Driver");
+        CoreMicroDelayAndPet (500000); // 0.5s pause to read which driver kills screen/CPU
         *(volatile UINT32 *)(UINTN)0x0B017008 = 0; // WDT0_EN = 0 (DISABLE)
         *(volatile UINT32 *)(UINTN)0x0B017004 = 1; // WDT0_RST = 1 (PET)
         Status = CoreStartImage (DriverEntry->ImageHandle, NULL, NULL);
         DEBUG ((DEBUG_ERROR, "[DXE] <<< Finished Driver: %a: %r >>>\n\n", DriverName, Status));
-        CoreSleepAndPet (15, "Finished Driver");
+        CoreMicroDelayAndPet (100000); // 0.1s pause
 
         REPORT_STATUS_CODE_WITH_EXTENDED_DATA (
           EFI_PROGRESS_CODE,

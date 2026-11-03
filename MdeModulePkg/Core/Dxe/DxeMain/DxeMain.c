@@ -277,6 +277,7 @@ DxeMain (
   // Initialize Debug Agent to support source level debug in DXE phase
   //
   DEBUG ((DEBUG_ERROR, "\n=== DXE CORE MAIN ENTRY (Hob=%p) ===\n", HobStart));
+  CoreSleepAndPet (60, "DXE Entry 60s Sleep Test");
 
   InitializeDebugAgent (DEBUG_AGENT_INIT_DXE_CORE, HobStart, NULL);
 
@@ -284,7 +285,6 @@ DxeMain (
   // Initialize Memory Services
   //
   CoreInitializeMemoryServices (&HobStart, &MemoryBaseAddress, &MemoryLength);
-  FbFillScreen(0x00FF0000); // RED right after CoreInitializeMemoryServices
 
   MemoryProfileInit (HobStart);
 
@@ -316,10 +316,8 @@ DxeMain (
   // Call constructor for all libraries
   //
   DEBUG ((DEBUG_ERROR, "DXE: Running Library Constructors...\n"));
-  FbFillScreen(0x00FFFF00); // YELLOW: Running Library Constructors
   ProcessLibraryConstructorList (gDxeCoreImageHandle, gDxeCoreST);
   DEBUG ((DEBUG_ERROR, "DXE: Library Constructors Done\n"));
-  FbFillScreen(0x0000FF00); // GREEN right after DXE: Library Constructors Done
   PERF_CROSSMODULE_END ("PEI");
   PERF_CROSSMODULE_BEGIN ("DXE");
   DEBUG ((DEBUG_ERROR, "DXE: CrossModule Perf Done\n"));
@@ -574,7 +572,6 @@ DxeMain (
   // Invoke the DXE Dispatcher
   //
   DEBUG ((DEBUG_ERROR, "\n=== DXE: INVOKING DRIVER DISPATCHER ===\n"));
-  FbFillScreen(0x000000FF); // BLUE right before CoreDispatcher
   CoreDispatcher ();
 
   //
